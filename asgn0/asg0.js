@@ -57,3 +57,58 @@ function handleDrawEvent() {
   drawVector(ctx, v1, "red");
   drawVector(ctx, v2, "blue");
 }
+
+function handleDrawOperationEvent() {
+  const canvas = document.getElementById('example');
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle='black';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const x = parseFloat(document.getElementById('xCoord').value);
+  const y = parseFloat(document.getElementById('yCoord').value);
+
+  let v1 = new Vector3([x, y, 0]);
+
+  const x2 = parseFloat(document.getElementById('xCoord2').value);
+  const y2 = parseFloat(document.getElementById('yCoord2').value);
+
+  let v2 = new Vector3([x2, y2, 0]);
+
+  drawVector(ctx, v1, "red");
+  drawVector(ctx, v2, "blue");
+
+  const op = document.getElementById('opSelect').value;
+  const s = parseFloat(document.getElementById('scalar').value);
+
+  if (op === "add") {
+    //v3 = v1 + v2
+    const v3 = new Vector3([v1.elements[0], v1.elements[1], v1.elements[2]]);
+    v3.add(v2);
+    drawVector(ctx, v3, "green");
+  } else if (op === "sub") {
+    //v3 = v1 - v2
+    const v3 = new Vector3([v1.elements[0], v1.elements[1], v1.elements[2]]);
+    v3.sub(v2);
+    drawVector(ctx, v3, "green");
+  } else if (op === "mul") {
+    //v3 = v1 * scalar and v4 = v2 * scalar
+    const v3 = new Vector3([v1.elements[0], v1.elements[1], v1.elements[2]]);
+    const v4 = new Vector3([v2.elements[0], v2.elements[1], v2.elements[2]]);
+
+    v3.mul(s);
+    v4.mul(s);
+    drawVector(ctx, v3, "green");
+    drawVector(ctx, v4, "green");
+
+  } else if (op === "div") {
+    //v3 = v1 / scalar and v4 = v2 / scalar
+    const v3 = new Vector3([v1.elements[0], v1.elements[1], v1.elements[2]]);
+    const v4 = new Vector3([v2.elements[0], v2.elements[1], v2.elements[2]]);
+
+    v3.div(s);
+    v4.div(s);
+    drawVector(ctx, v3, "green");
+    drawVector(ctx, v4, "green");
+  }
+}
