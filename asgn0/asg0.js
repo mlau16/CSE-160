@@ -110,5 +110,50 @@ function handleDrawOperationEvent() {
     v4.div(s);
     drawVector(ctx, v3, "green");
     drawVector(ctx, v4, "green");
+  } else if (op === "angle") {
+    const angle = angleBetween(v1, v2);
+    console.log("Angle: " + angle);
+    
+  } else if (op === "area"){
+    const area = areaTriangle(v1, v2);
+    console.log("Area of the triangle: " + area);
+
+  } else if (op === "mag"){
+    console.log("Magnitude v1: " + v1.magnitude());
+    console.log("Magnitude v2: " + v2.magnitude());
+    
+  } else if (op === "norm") {
+    const v3 = new Vector3([v1.elements[0], v1.elements[1], v1.elements[2]]);
+    const v4 = new Vector3([v2.elements[0], v2.elements[1], v2.elements[2]]);
+
+    v3.normalize();
+    v4.normalize();
+
+    drawVector(ctx, v3, "green");
+    drawVector(ctx, v4, "green");
   }
+}
+
+function angleBetween(v1, v2) { 
+  const dot = Vector3.dot(v1,v2);
+  const mag1 = v1.magnitude();
+  const mag2 = v2.magnitude();
+
+  const cosAlpha = dot / (mag1 * mag2);
+
+  const clamp = Math.min(1, Math.max(-1, cosAlpha));
+
+  const angleRad = Math.acos(clamp);
+  const angleDeg = angleRad * 180 / Math.PI;
+
+  return angleDeg;
+
+}
+
+function areaTriangle(v1, v2) {
+  // area of triangle = ||v1 x v2|| / 2
+  const crossVec = Vector3.cross(v1, v2);
+  const parArea = crossVec.magnitude();
+
+  return parArea / 2;
 }
