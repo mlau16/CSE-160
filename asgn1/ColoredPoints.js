@@ -32,6 +32,8 @@ let g_selectedSize = 20.0;
 let g_vertexBuffer = null;
 let g_selectedType = "POINT";
 
+const g_circleSegments = 20;
+
 class Point {
   constructor(position, color, size) {
     this.position = position;
@@ -128,6 +130,10 @@ function addActionsForHtmlUI() {
   document.getElementById('triangleButton').onclick = () => {
     g_selectedType = "TRIANGLE";
   };
+
+  document.getElementById('circleButton').onclick = () => {
+    g_selectedType = "CIRCLE";
+  }
 
   clearButton.onclick = function () {
     g_shapesList = [];
@@ -238,5 +244,14 @@ function click(ev) {
     );
     g_shapesList.push(t);
     t.render();
+  } else if (g_selectedType === "CIRCLE") {
+    const c = new Circle(
+      [x,y],
+      [g_selectedColor[0], g_selectedColor[1], g_selectedColor[2], 1.0],
+      g_selectedSize,
+      g_circleSegments
+    );
+    g_shapesList.push(c);
+    c.render();
   }
 }
