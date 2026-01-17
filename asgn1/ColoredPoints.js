@@ -29,14 +29,18 @@ let g_selectedColor = [1.0, 1.0, 1.0, 1.0];
 let u_Size;
 let g_selectedSize = 20.0;
 
+let g_vertexBuffer = null;
+let g_selectedType = "POINT";
+
 class Point {
   constructor(position, color, size) {
     this.position = position;
     this.color = color;
     this.size = size;
   }
-
+  
   render() {
+    gl.disableVertexAttribArray(a_Position);
     //Set position
     gl.vertexAttrib3f(
       a_Position,
@@ -102,6 +106,12 @@ function connectVariablesToGLSL(){
     console.log('Failed to get the storage location of u_Size');
     return;
   }
+
+  g_vertexBuffer = gl.createBuffer();
+  if(!g_vertexBuffer) {
+    console.log('Failed to create the buffer object');
+    return;
+  }
 }
 
 function addActionsForHtmlUI() {
@@ -110,6 +120,14 @@ function addActionsForHtmlUI() {
   const blueSlider = document.getElementById('blueSlide');
   const sizeSlider = document.getElementById('sizeSlide');
   const clearButton = document.getElementById('clearButton');
+
+  document.getElementById('squareButton').onclick = () => {
+    g_selectedType = "POINT";
+  };
+
+  document.getElementById('triangleButton').onclick = () => {
+    g_selectedType = "TRIANGLE";
+  };
 
   clearButton.onclick = function () {
     g_shapesList = [];
@@ -153,7 +171,6 @@ function renderOneShape(shape) {
 
 function main() {
   if(!setupWebGL()) return;
-  setupWebGL();
   connectVariablesToGLSL();
   addActionsForHtmlUI();
   handleClicks();
@@ -186,19 +203,40 @@ function renderAllShapes(){
   }
 }
 
-function click(ev) {
+function drawTriangle(verts) {
+  const n = 3;
 
+  const vertices = new Float32Array(verts);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, g_vertexBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW);
+
+  gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, 0, 0);
+  gl.enableVertexAttribArray(a_Position);
+
+  gl.drawArrays(gl.TRIANGLES, 0 , n);
+}
+
+function click(ev) {
   //Extract the event click and return it 
   let [x,y] = convertCoordinatesEventToGL(ev);
 
-  let point = new Point(
-    [x,y],
-    [g_selectedColor[0], g_selectedColor[1], g_selectedColor[2], 1.0],
-    g_selectedSize
-  );
+  if (g_selectedType === "POINT") {
+    let point = new Point(
+      [x,y],
+      [g_selectedColor[0], g_selectedColor[1], g_selectedColor[2], 1.0],
+      g_selectedSize
+    );
 
-  g_shapesList.push(point);
-
-  //Draw every shape on the canvas
-  renderOneShape(point);
+    g_shapesList.push(point);
+    point.render();
+  } else if (g_selectedType === "TRIANGLE") {
+    const t = new Triangle(
+      [x,y],
+      [g_selectedColor[0], g_selectedColor[1], g_selectedColor[2], 1.0],
+      g_selectedSize
+    );
+    g_shapesList.push(t);
+    t.render();
+  }
 }
