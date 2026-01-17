@@ -108,7 +108,13 @@ function addActionsForHtmlUI() {
   const greenSlider = document.getElementById('greenSlide');
   const blueSlider = document.getElementById('blueSlide');
   const sizeSlider = document.getElementById('sizeSlide');
+  const clearButton = document.getElementById('clearButton');
 
+  clearButton.onclick = function () {
+    g_shapesList = [];
+    renderAllShapes();
+  };
+  
   function updateColorFromSliders() {
     const r = Number(redSlider.value) / 100;
     const g = Number(greenSlider.value) / 100;
