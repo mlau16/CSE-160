@@ -66,7 +66,8 @@ function setupWebGL(){
    // Retrieve <canvas> element
   canvas = document.getElementById('webgl');
 
-  gl = getWebGLContext(canvas);
+  gl = canvas.getContext("webgl", { preserveDrawingBuffer: true });
+
   if (!gl) {
     console.log('Failed to get the rendering context for WebGL');
     return false;
@@ -114,7 +115,7 @@ function addActionsForHtmlUI() {
     g_shapesList = [];
     renderAllShapes();
   };
-  
+
   function updateColorFromSliders() {
     const r = Number(redSlider.value) / 100;
     const g = Number(greenSlider.value) / 100;
@@ -135,14 +136,27 @@ function addActionsForHtmlUI() {
   sizeSlider.addEventListener('input', updateSizeFromSlider);
 }
 
+function handleClicks() {
+  // Register function (event handler) to be called on a mouse press
+  canvas.onmousedown = click;
+
+  canvas.onmousemove = function (ev) {
+    if (ev.buttons == 1) {
+      click(ev);
+    }
+  }
+}
+
+function renderOneShape(shape) {
+  shape.render();
+}
+
 function main() {
   if(!setupWebGL()) return;
   setupWebGL();
   connectVariablesToGLSL();
   addActionsForHtmlUI();
-
-  // Register function (event handler) to be called on a mouse press
-  canvas.onmousedown = click;
+  handleClicks();
 
   // Specify the color for clearing <canvas>
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -186,5 +200,5 @@ function click(ev) {
   g_shapesList.push(point);
 
   //Draw every shape on the canvas
-  renderAllShapes();
+  renderOneShape(point);
 }
