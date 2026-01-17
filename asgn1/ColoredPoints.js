@@ -3,7 +3,7 @@
 var VSHADER_SOURCE = `
   attribute vec4 a_Position;
   uniform float u_Size;
-  
+
   void main() {
     gl_Position = a_Position;
     gl_PointSize = u_Size;
@@ -17,6 +17,7 @@ var FSHADER_SOURCE =`
     gl_FragColor = u_FragColor;
   }`
 
+var g_shapesList = [];
 
 let canvas;
 let gl;
@@ -27,7 +28,39 @@ let g_selectedColor = [1.0, 1.0, 1.0, 1.0];
 
 let u_Size;
 let g_selectedSize = 20.0;
-var g_sizes = [];
+
+class Point {
+  constructor(position, color, size) {
+    this.position = position;
+    this.color = color;
+    this.size = size;
+  }
+
+  render() {
+    //Set position
+    gl.vertexAttrib3f(
+      a_Position,
+      this.position[0],
+      this.position[1],
+      0.0
+    );
+
+    //Set color
+    gl.uniform4f(
+      u_FragColor,
+      this.color[0],
+      this.color[1],
+      this.color[2],
+      this.color[3]
+    );
+
+    //Set size
+    gl.uniform1f(u_Size, this.size);
+
+    //Draw
+    gl.drawArrays(gl.POINTS, 0, 1);
+  }
+}
 
 function setupWebGL(){
    // Retrieve <canvas> element
@@ -112,9 +145,6 @@ function main() {
   gl.clear(gl.COLOR_BUFFER_BIT);
 }
 
-var g_points = [];  // The array for the position of a mouse press
-var g_colors = [];  // The array to store the color of a point
-
 function convertCoordinatesEventToGL(ev) {
   var x = ev.clientX; // x coordinate of a mouse pointer
   var y = ev.clientY; // y coordinate of a mouse pointer
@@ -130,19 +160,9 @@ function renderAllShapes(){
   // Clear <canvas>
   gl.clear(gl.COLOR_BUFFER_BIT);
 
-  var len = g_points.length;
+  var len = g_shapesList.length;
   for(var i = 0; i < len; i++) {
-    var xy = g_points[i];
-    var rgba = g_colors[i];
-
-    // Pass the position of a point to a_Position variable
-    gl.vertexAttrib3f(a_Position, xy[0], xy[1], 0.0);
-    // Pass the color of a point to u_FragColor variable
-    gl.uniform4f(u_FragColor, rgba[0], rgba[1], rgba[2], rgba[3]);
-    //Pass the size of a point to u_Size variable
-    gl.uniform1f(u_Size, g_sizes[i]);
-    // Draw
-    gl.drawArrays(gl.POINTS, 0, 1);
+    g_shapesList[i].render();
   }
 }
 
@@ -151,10 +171,13 @@ function click(ev) {
   //Extract the event click and return it 
   let [x,y] = convertCoordinatesEventToGL(ev);
 
-  // Store coordinates to array
-  g_points.push([x, y]);
-  g_colors.push([g_selectedColor[0], g_selectedColor[1], g_selectedColor[2], 1.0]);
-  g_sizes.push(g_selectedSize);
+  let point = new Point(
+    [x,y],
+    [g_selectedColor[0], g_selectedColor[1], g_selectedColor[2], 1.0],
+    g_selectedSize
+  );
+
+  g_shapesList.push(point);
 
   //Draw every shape on the canvas
   renderAllShapes();
