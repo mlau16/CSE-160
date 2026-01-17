@@ -125,6 +125,10 @@ function addActionsForHtmlUI() {
   const clearButton = document.getElementById('clearButton');
   const segSlider = document.getElementById('segSlide');
 
+  document.getElementById('chickenButton').onclick = () => {
+    drawMyPicture();
+  }
+
   document.getElementById('squareButton').onclick = () => {
     g_selectedType = "POINT";
   };
@@ -262,4 +266,61 @@ function click(ev) {
     g_shapesList.push(c);
     c.render();
   }
+}
+
+function drawMyPicture() {
+  gl.uniform4f(u_FragColor, 1.0, 1.0, 1.0, 1.0);
+  //head
+  drawTriangle([-0.2,  0.3,   0.0,  0.3,  -0.2,  0.5]);
+  drawTriangle([ 0.0,  0.3,   0.0,  0.5,  -0.2,  0.5]);
+
+  //neck
+  drawTriangle([ -0.09,  0.3,   0.0,  0.3,  -0.09,  0.2]);
+  drawTriangle([ 0.0,  0.2,   0.0,  0.3,  -0.09,  0.2]);
+  drawTriangle([ 0.0,  0.2,   -0.045,  0.15,  -0.09,  0.2]);
+
+  //body1
+  drawTriangle([ 0.0,  0.25,   0.0,  0.4,  0.15,  0.25]);
+  drawTriangle([ 0.15,  0.4,   0.0,  0.4,  0.15,  0.25]);
+
+  //body2
+  drawTriangle([ 0.15,  0.15, -0.045,  0.15,  0.0,  0.25]);
+  drawTriangle([ 0.15,  0.15, 0.15,  0.25,  0.0,  0.25]);
+
+  //tail
+  drawTriangle([ 0.15,  0.15, 0.15,  0.25,  0.2,  0.2]);
+  drawTriangle([ 0.2,  0.4, 0.15,  0.25,  0.2,  0.2]);
+  drawTriangle([ 0.2,  0.4, 0.15,  0.25,  0.15,  0.4]);
+  drawTriangle([ 0.2,  0.4, 0.2,  0.45,  0.15,  0.4]);
+  drawTriangle([ 0.2,  0.2, 0.2,  0.45,  0.25,  0.35]);
+
+  //gizzard
+  gl.uniform4f(u_FragColor, 1.0, 0.0, 0.0, 1.0);
+  drawTriangle([-0.2, 0.3, -0.15, 0.25, -0.09, 0.3]);
+  drawTriangle([-0.2, 0.5, -0.23, 0.47, -0.2, 0.45]);
+  drawTriangle([-0.2, 0.5, -0.15, 0.58, -0.06, 0.5]);
+
+  //beak
+  gl.uniform4f(u_FragColor, 1.0, 1.0, 0.0, 1.0);
+  drawTriangle([-0.2, 0.3, -0.25, 0.35, -0.2, 0.4]);
+
+  //f00t1(initials)
+  drawTriangle([ -0.045,  0.08,   -0.045,  0.15,  -0.03,  0.11]);
+  drawTriangle([ -0.044,  0.08,   0.037,  0.08,  0.0,  0.092]);
+  drawTriangle([ -0.044,  0.08,   -0.045,  0.01,  -0.06,  0.05]);
+  drawTriangle([ -0.045,  0.055,   -0.09,  0.01,  -0.06,  0.05]);
+  drawTriangle([ -0.12,  0.05,   -0.075,  0.01,  -0.12,  0.08]);
+  drawTriangle([ -0.12,  0.045,   -0.15,  0.01,  -0.12,  0.08]);
+
+  //foot2
+  drawTriangle([ 0.155,  0.08,   0.155,  0.15,  0.17,  0.11]);
+  drawTriangle([ 0.156,  0.08,   0.237,  0.08,  0.2,  0.092]);
+  drawTriangle([ 0.156,  0.08,   0.155,  0.01,  0.14,  0.05]);
+  drawTriangle([ 0.155,  0.055,   0.11,  0.01,  0.14,  0.05]);
+  drawTriangle([ 0.08,  0.05,   0.125,  0.01,  0.08,  0.08]);
+  drawTriangle([ 0.08,  0.045,   0.05,  0.01,  0.08,  0.08]);
+
+  //eye
+  gl.uniform4f(u_FragColor, 0.0, 0.0, 0.0, 1.0);
+  drawTriangle([ -0.13,  0.37,   -0.063,  0.43,  -0.13,  0.43]);
 }
