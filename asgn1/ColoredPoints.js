@@ -33,6 +33,7 @@ let g_vertexBuffer = null;
 let g_selectedType = "POINT";
 
 const g_circleSegments = 20;
+let g_selectedSegments = 20;
 
 class Point {
   constructor(position, color, size) {
@@ -122,6 +123,7 @@ function addActionsForHtmlUI() {
   const blueSlider = document.getElementById('blueSlide');
   const sizeSlider = document.getElementById('sizeSlide');
   const clearButton = document.getElementById('clearButton');
+  const segSlider = document.getElementById('segSlide');
 
   document.getElementById('squareButton').onclick = () => {
     g_selectedType = "POINT";
@@ -151,13 +153,19 @@ function addActionsForHtmlUI() {
     g_selectedSize = Number(sizeSlider.value);
   }
 
+  function updateSegmentsFromSlider() {
+    g_selectedSegments = Number(segSlider.value);
+  }
+
   updateColorFromSliders();
   updateSizeFromSlider();
+  updateSegmentsFromSlider();
 
   redSlider.addEventListener('input', updateColorFromSliders);
   greenSlider.addEventListener('input', updateColorFromSliders);
   blueSlider.addEventListener('input', updateColorFromSliders);
   sizeSlider.addEventListener('input', updateSizeFromSlider);
+  segSlider.addEventListener('input', updateSegmentsFromSlider);
 }
 
 function handleClicks() {
@@ -249,7 +257,7 @@ function click(ev) {
       [x,y],
       [g_selectedColor[0], g_selectedColor[1], g_selectedColor[2], 1.0],
       g_selectedSize,
-      g_circleSegments
+      g_selectedSegments
     );
     g_shapesList.push(c);
     c.render();
