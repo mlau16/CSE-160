@@ -2,6 +2,8 @@
 // Vertex shader program
 var VSHADER_SOURCE = `
   attribute vec4 a_Position;
+  uniform float u_Size;
+  
   void main() {
     gl_Position = a_Position;
     gl_PointSize = u_Size;
@@ -34,8 +36,9 @@ function setupWebGL(){
   gl = getWebGLContext(canvas);
   if (!gl) {
     console.log('Failed to get the rendering context for WebGL');
-    return;
+    return false;
   }
+  return true;
 }
 
 function connectVariablesToGLSL(){
@@ -71,6 +74,7 @@ function addActionsForHtmlUI() {
   const redSlider = document.getElementById('redSlide');
   const greenSlider = document.getElementById('greenSlide');
   const blueSlider = document.getElementById('blueSlide');
+  const sizeSlider = document.getElementById('sizeSlide');
 
   function updateColorFromSliders() {
     const r = Number(redSlider.value) / 100;
@@ -79,14 +83,21 @@ function addActionsForHtmlUI() {
     g_selectedColor = [r, g, b, 1.0];
   }
 
+  function updateSizeFromSlider(){
+    g_selectedSize = Number(sizeSlider.value);
+  }
+
   updateColorFromSliders();
+  updateSizeFromSlider();
 
   redSlider.addEventListener('input', updateColorFromSliders);
   greenSlider.addEventListener('input', updateColorFromSliders);
   blueSlider.addEventListener('input', updateColorFromSliders);
+  sizeSlider.addEventListener('input', updateSizeFromSlider);
 }
 
 function main() {
+  if(!setupWebGL()) return;
   setupWebGL();
   connectVariablesToGLSL();
   addActionsForHtmlUI();
@@ -128,6 +139,8 @@ function renderAllShapes(){
     gl.vertexAttrib3f(a_Position, xy[0], xy[1], 0.0);
     // Pass the color of a point to u_FragColor variable
     gl.uniform4f(u_FragColor, rgba[0], rgba[1], rgba[2], rgba[3]);
+    //Pass the size of a point to u_Size variable
+    gl.uniform1f(u_Size, g_sizes[i]);
     // Draw
     gl.drawArrays(gl.POINTS, 0, 1);
   }
@@ -137,11 +150,11 @@ function click(ev) {
 
   //Extract the event click and return it 
   let [x,y] = convertCoordinatesEventToGL(ev);
-  // Store the coordinates to g_points array
+
+  // Store coordinates to array
   g_points.push([x, y]);
-  
-  // Store the coordinates to g_points array
   g_colors.push([g_selectedColor[0], g_selectedColor[1], g_selectedColor[2], 1.0]);
+  g_sizes.push(g_selectedSize);
 
   //Draw every shape on the canvas
   renderAllShapes();
