@@ -35,6 +35,17 @@ let g_selectedType = "POINT";
 const g_circleSegments = 20;
 let g_selectedSegments = 20;
 
+let g_mode = "PAINT";
+
+let g_score = 0;
+let g_timeLeft = 30.0;
+let g_gameLastTime = 0;
+let g_spawnTimer = 0;
+
+let g_targets = [];
+const g_spawnInterval = 0.6;
+
+
 class Point {
   constructor(position, color, size) {
     this.position = position;
@@ -125,6 +136,9 @@ function addActionsForHtmlUI() {
   const clearButton = document.getElementById('clearButton');
   const segSlider = document.getElementById('segSlide');
 
+  document.getElementById('startGameButton').onclick = startGame;
+  document.getElementById('stopGameButton').onclick = stopGame;
+
   document.getElementById('chickenButton').onclick = () => {
     drawMyPicture();
   }
@@ -177,6 +191,7 @@ function handleClicks() {
   canvas.onmousedown = click;
 
   canvas.onmousemove = function (ev) {
+    if (g_mode !== "PAINT") return;
     if (ev.buttons == 1) {
       click(ev);
     }
@@ -221,6 +236,81 @@ function renderAllShapes(){
   }
 }
 
+function updateHUD() { 
+  const scoreText = document.getElementById('scoreText');
+  const timeText = document.getElementById('timeText');
+
+  if (scoreText) scoreText.innerText = String(g_score);
+  if (timeText) timeText.innerText = g_timeLeft.toFixed(1);
+}
+
+//Game Mode Functions
+function startGame() {
+  g_mode = "GAME";
+  g_score = 0;
+  g_timeLeft = 30.0;
+  g_targets = [];
+  g_spawnTimer = 0;
+  g_gameLastTime = performance.now();
+
+  updateHUD();
+  requestAnimationFrame(gameLoop);
+}
+
+function stopGame() {
+  g_mode = "PAINT";
+  updateHUD();
+  renderAllShapes();
+}
+
+function spawnTarget() {
+  const size = 18 + Math.random() * 18;
+  const segments = 20;
+  const r = size / 200;
+
+  const x = (Math.random() * (2 - 2 * r)) - (1 - r);
+  const y = (Math.random() * (2 - 2 * r)) - (1 - r);
+
+  const speed = 0.4 + Math.random() *0.6;
+  const angle = Math.random() * Math.PI * 2;
+  const vx = Math.cos(angle) * speed;
+  const vy = Math.sin(angle) * speed;
+
+  const color = [Math.random(), Math.random(), Math.random(), 1.0];
+
+  g_targets.push(new Target([x,y], color, size, segments, [vx, vy]));
+}
+
+function gameLoop(now) {
+  if (g_mode !== "GAME") return;
+
+  const dt = (now - g_gameLastTime) / 1000.0;
+  g_gameLastTime = now;
+
+  g_timeLeft -= dt;
+  if (g_timeLeft <= 0) {
+    g_timeLeft = 0;
+    updateHUD();
+    stopGame();
+    return;
+  }
+
+  g_spawnTimer += dt;
+  while (g_spawnTimer >= g_spawnInterval) {
+    g_spawnTimer -= g_spawnInterval;
+    spawnTarget();
+  }
+
+  for (const t of g_targets) t.update(dt);
+
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  for (const t of g_targets) t.render();
+
+  updateHUD();
+  requestAnimationFrame(gameLoop);
+}
+
+//Draw Triangles
 function drawTriangle(verts) {
   const n = 3;
 
@@ -235,9 +325,28 @@ function drawTriangle(verts) {
   gl.drawArrays(gl.TRIANGLES, 0 , n);
 }
 
+//Click
 function click(ev) {
   //Extract the event click and return it 
   let [x,y] = convertCoordinatesEventToGL(ev);
+
+  if (g_mode === "GAME") {
+    for (let i = g_targets.length - 1; i >= 0; i--) {
+      const t = g_targets[i];
+      const dx = x - t.position[0];
+      const dy = y - t.position[1];
+      const dist2 = dx*dx + dy*dy;
+      const r = t.radiusClip();
+
+      if (dist2 <= r*r) {
+        g_targets.splice(i, 1);
+        g_score += 1;
+        updateHUD();
+        break;
+      }
+    }
+    return;
+  }
 
   if (g_selectedType === "POINT") {
     let point = new Point(
@@ -268,6 +377,7 @@ function click(ev) {
   }
 }
 
+//Draw A Picture
 function drawMyPicture() {
   gl.uniform4f(u_FragColor, 1.0, 1.0, 1.0, 1.0);
   //head

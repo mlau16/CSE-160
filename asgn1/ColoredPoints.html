@@ -6,6 +6,13 @@
   </head>
 
   <body onload="main()">
+    <button id ="startGameButton">Start Target Practice</button>
+    <button id="stopGameButton">Stop Game</button>
+
+    <span style="margin-left:12px;">Score: <span id="scoreText">0</span></span>
+    <span style="margin-left:12px;">Time: <span id="timeText">30.0</span></span>
+    <br>
+
     <canvas id="webgl" width="400" height="400">
     Please use a browser that supports "canvas"
     </canvas>
@@ -39,6 +46,7 @@
     <script src="lib/webgl-utils.js"></script>
     <script src="lib/webgl-debug.js"></script>
     <script src="lib/cuon-utils.js"></script>
+    <script src="Target.js"></script>
     <script src="Triangle.js"></script>
     <script src="Circle.js"></script>
     <script src="ColoredPoints.js"></script>
