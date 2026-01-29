@@ -1,0 +1,58 @@
+<!--
+  Mandy Lau
+  mlau16@ucsc.edu
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Blocky Animal</title>
+  </head>
+
+  <body onload="main()">
+    <button id ="startGameButton">Start Target Practice</button>
+    <button id="stopGameButton">Stop Game</button>
+
+    <span style="margin-left:12px;">Score: <span id="scoreText">0</span></span>
+    <span style="margin-left:12px;">Time: <span id="timeText">30.0</span></span>
+    <br>
+
+    <canvas id="webgl" width="400" height="400">
+    Please use a browser that supports "canvas"
+    </canvas>
+    
+    <div>
+    <button id="clearButton">Clear Canvas</button>
+    </div>
+
+    <br>
+    <div>Drawing Mode:</div>
+    <div>
+      <button id="squareButton">Square</button>
+      <button id="triangleButton">Triangle</button>
+      <button id="circleButton">Circle</button>
+    </div>
+
+    <div>Shape Color:</div>
+    <div>  
+      <label>R <input id="redSlide" type="range" min="0" max="100" value="100"></label>
+      <label>G <input id="greenSlide" type="range" min="0" max="100" value="100"></label>
+      <label>B <input id="blueSlide" type="range" min="0" max="100" value="100"></label>
+    </div>
+
+    <div>
+      <label>Shape Size: <input id="sizeSlide" type="range" min="1" max="40" value="20"></label>
+      <label>(Circles) Segment Count: <input id="segSlide" type="range" min="3" max="60" value="20"></label>
+    </div>
+
+    <script src="../lib/webgl-utils.js"></script>
+    <script src="../lib/webgl-debug.js"></script>
+    <script src="../lib/cuon-utils.js"></script>
+    <script src="../lib/cuon-matrix-cse160.js"></script>
+    <script src="Cube.js"></script>
+    <script src="Triangle.js"></script>
+    <script src="Circle.js"></script>
+    <script src="BlockyAnimal.js"></script>
+  </body>
+</html>
