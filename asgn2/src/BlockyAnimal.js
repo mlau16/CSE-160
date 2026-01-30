@@ -49,6 +49,8 @@ const g_spawnInterval = 0.6;
 let g_globalAngle = 0;
 let u_GlobalRotateMatrix;
 
+let g_rotateAngle = 0;
+let g_rotateNeck = 0;
 
 function setupWebGL(){
    // Retrieve <canvas> element
@@ -60,7 +62,9 @@ function setupWebGL(){
     console.log('Failed to get the rendering context for WebGL');
     return false;
   }
+  gl.enable(gl.DEPTH_TEST);
   return true;
+
 }
 
 function connectVariablesToGLSL(){
@@ -143,6 +147,16 @@ function addActionsForHtmlUI() {
     renderAllShapes();
   });
 
+  document.getElementById('rotateSlide').addEventListener('input', function () {
+    g_rotateAngle = this.value;
+    renderAllShapes();
+  });
+
+  document.getElementById('neckSlide').addEventListener('input', function () {
+    g_rotateNeck = this.value;
+    renderAllShapes();
+  })
+
   clearButton.onclick = function () {
     g_shapesList = [];
     renderAllShapes();
@@ -197,11 +211,20 @@ function main() {
 
   // Specify the color for clearing <canvas>
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.clearDepth(1.0);
 
   // Clear <canvas>
-  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   renderAllShapes();
+}
+
+function tick() {
+  console.log(performance.now());
+
+  renderAllShapes();
+
+  requestAnimationFrame(tick);
 }
 
 function convertCoordinatesEventToGL(ev) {
@@ -217,7 +240,7 @@ function convertCoordinatesEventToGL(ev) {
 
 function renderAllShapes(){
   // Clear <canvas>
-  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   let globalRotMat = new Matrix4();
   globalRotMat.rotate(g_globalAngle, 0, 1, 0);
@@ -231,16 +254,126 @@ function renderAllShapes(){
   //drawTriangle3D([-1.0,0.0,0.0, 0.5,-1.0,0.0, 0.0,0.0,0.0]);
 
   var body = new Cube();
-  body.color = [1.0,0.0,0.0,1.0];
-  body.matrix.translate(-0.25, -0.5, 0.0);
-  body.matrix.scale(0.5, 1, 0.5);
+  body.color = [1,1,1,1];
+  body.matrix.translate(0, 0, 0.2);
+  body.matrix.rotate(g_rotateAngle, 0, 0, 1);
+  var bodyCoords = new Matrix4(body.matrix);
+  body.matrix.scale(0.5, 0.5, 0.8);
   body.render();
 
+  var neck = new Cube();
+  neck.color = [1, 1, 1, 1];
+  neck.matrix = new Matrix4(bodyCoords);
+  neck.matrix.translate(0, 0.15, -0.25);
+
+  neck.matrix.translate(0.5, 0.0, 0.0);
+  neck.matrix.rotate(g_rotateNeck, 1, 0, 0);
+  neck.matrix.translate(-0.5, -0.0, -0.0);
+
+  neck.matrix.scale(0.45, 0.5, 0.35);
+  var neckCoords = new Matrix4(neck.matrix);
+  neck.render();
+
   var head = new Cube();
-  head.color = [1, 0.8, 0.6, 1];
-  head.matrix.translate(-0.2, 0.2, 0);
-  head.matrix.scale(0.4, 0.4, 0.3);
+  head.color = [1, 1, 1, 1];
+  head.matrix = new Matrix4(neckCoords);
+  head.matrix.translate(0, 0.25, -0.1);
+  head.matrix.scale(0.8, 0.7, 1);
+  var headCoords = new Matrix4(head.matrix);
   head.render();
+
+  var face = new Cube();
+  face.color = [0.6, 0.6, 0.6, 1];
+  face.matrix = new Matrix4(headCoords);
+  face.matrix.translate(0, -0.05, -0.5);
+  face.matrix.scale(0.9, 0.65, 1.2);
+  var faceCoords = new Matrix4(face.matrix);
+  face.render();
+
+  var eyes = new Cube();
+  eyes.color = [0,0,0,1];
+  eyes.matrix = new Matrix4(faceCoords);
+  eyes.matrix.translate(0.0, 0.2, -0.15);
+  eyes.matrix.scale(1.05, 0.2, 0.15);
+  eyes.render();
+
+  var earL = new Cube();
+  earL.color = [1, 1, 1, 1];
+  earL.matrix = new Matrix4(faceCoords);
+  earL.matrix.translate(-0.65, 0.3, 0.3);
+  earL.matrix.rotate(25, 0, 0, 1);
+  earL.matrix.scale(0.8, 0.4, 0.4);
+  earL.render();
+
+  var earR = new Cube();
+  earR.color = [1, 1, 1, 1];
+  earR.matrix = new Matrix4(faceCoords);
+  earR.matrix.translate(0.65, 0.3, 0.3);
+  earR.matrix.rotate(335, 0, 0, 1);
+  earR.matrix.scale(0.8, 0.4, 0.4);
+  earR.render();
+
+  var nose = new Cube();
+  nose.color = [0,0,0,1];
+  nose.matrix = new Matrix4(faceCoords);
+  nose.matrix.translate(0, 0.2, -0.45);
+  nose.matrix.scale(0.4, 0.2, 0.2);
+  nose.render();
+
+  let bodyCoords2 = new Matrix4(body.matrix);
+
+  let legFL = new Matrix4(bodyCoords2);
+  legFL.translate(-0.33, -0.6, -0.37);
+  drawLeg(legFL);
+
+  let legFR = new Matrix4(bodyCoords2);
+  legFR.translate(0.33, -0.6, -0.37);
+  drawLeg(legFR);
+
+  let legBL = new Matrix4(bodyCoords2);
+  legBL.translate(-0.33, -0.6, 0.37);
+  drawLeg(legBL);
+
+  let legBR = new Matrix4(bodyCoords2);
+  legBR.translate(0.33, -0.6, 0.37);
+  drawLeg(legBR);
+
+  var tail = new Cube();
+  tail.color = [1,1,1,1];
+  tail.matrix.translate(0.0, 0.15, 0.62);
+  tail.matrix.rotate(45, 1, 0, 0);
+  tail.matrix.scale(0.2, 0.1, 0.15);
+  tail.render();
+
+}
+
+function drawCube(color, matrix){
+  const c = new Cube();
+  c.color = color;
+  c.matrix = matrix;
+  c.render();
+}
+
+function drawLeg(baseMat) {
+  const upperColor = [1,1,1,1];
+  const lowerColor = [1,1,1,1];
+  const footColor = [0.3, 0.3, 0.3, 1];
+
+  let upper = new Matrix4(baseMat);
+  var upperCoords = new Matrix4(upper);
+  upper.scale(0.35, 0.4, 0.25);
+  drawCube(upperColor, upper);
+
+  let lower = new Matrix4(upperCoords);
+  lower.translate(0, -0.23, 0);
+  var lowerCoords = new Matrix4(lower);
+  lower.scale(0.25, 0.35, 0.15);
+  drawCube(lowerColor, lower);
+
+  let foot = new Matrix4(lowerCoords);
+  foot.translate(0, -0.25, 0);
+  foot.scale(0.25, 0.15, 0.1);
+  drawCube(footColor, foot);
 
 }
 
