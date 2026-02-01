@@ -52,6 +52,8 @@ let u_GlobalRotateMatrix;
 let g_rotateAngle = 0;
 let g_rotateNeck = 0;
 
+let g_modelAnimation = false;
+
 function setupWebGL(){
    // Retrieve <canvas> element
   canvas = document.getElementById('webgl');
@@ -120,27 +122,29 @@ function connectVariablesToGLSL(){
 }
 
 function addActionsForHtmlUI() {
-  const redSlider = document.getElementById('redSlide');
-  const greenSlider = document.getElementById('greenSlide');
-  const blueSlider = document.getElementById('blueSlide');
-  const sizeSlider = document.getElementById('sizeSlide');
-  const clearButton = document.getElementById('clearButton');
-  const segSlider = document.getElementById('segSlide');
+  // const redSlider = document.getElementById('redSlide');
+  // const greenSlider = document.getElementById('greenSlide');
+  // const blueSlider = document.getElementById('blueSlide');
+  // const sizeSlider = document.getElementById('sizeSlide');
+  // const clearButton = document.getElementById('clearButton');
+  // const segSlider = document.getElementById('segSlide');
 
-  document.getElementById('startGameButton').onclick = startGame;
-  document.getElementById('stopGameButton').onclick = stopGame;
+  // document.getElementById('startGameButton').onclick = startGame;
+  // document.getElementById('stopGameButton').onclick = stopGame;
 
-  document.getElementById('squareButton').onclick = () => {
-    g_selectedType = "POINT";
-  };
+  // document.getElementById('squareButton').onclick = () => {
+  //   g_selectedType = "POINT";
+  // };
 
-  document.getElementById('triangleButton').onclick = () => {
-    g_selectedType = "TRIANGLE";
-  };
+  // document.getElementById('triangleButton').onclick = () => {
+  //   g_selectedType = "TRIANGLE";
+  // };
 
-  document.getElementById('circleButton').onclick = () => {
-    g_selectedType = "CIRCLE";
-  }
+  // document.getElementById('circleButton').onclick = () => {
+  //   g_selectedType = "CIRCLE";
+  // }
+  document.getElementById('animationOnButton').onclick = function() {g_modelAnimation=true;};
+  document.getElementById('animationOffButton').onclick = function() {g_modelAnimation=false;};
 
   document.getElementById('angleSlide').addEventListener('input', function () {
     g_globalAngle = this.value;
@@ -152,53 +156,48 @@ function addActionsForHtmlUI() {
     renderAllShapes();
   });
 
-  document.getElementById('neckSlide').addEventListener('input', function () {
-    g_rotateNeck = this.value;
-    renderAllShapes();
-  })
+  // clearButton.onclick = function () {
+  //   g_shapesList = [];
+  //   renderAllShapes();
+  // };
 
-  clearButton.onclick = function () {
-    g_shapesList = [];
-    renderAllShapes();
-  };
+  // function updateColorFromSliders() {
+  //   const r = Number(redSlider.value) / 100;
+  //   const g = Number(greenSlider.value) / 100;
+  //   const b = Number(blueSlider.value) / 100;
+  //   g_selectedColor = [r, g, b, 1.0];
+  // }
 
-  function updateColorFromSliders() {
-    const r = Number(redSlider.value) / 100;
-    const g = Number(greenSlider.value) / 100;
-    const b = Number(blueSlider.value) / 100;
-    g_selectedColor = [r, g, b, 1.0];
-  }
+  // function updateSizeFromSlider(){
+  //   g_selectedSize = Number(sizeSlider.value);
+  // }
 
-  function updateSizeFromSlider(){
-    g_selectedSize = Number(sizeSlider.value);
-  }
+  // function updateSegmentsFromSlider() {
+  //   g_selectedSegments = Number(segSlider.value);
+  // }
 
-  function updateSegmentsFromSlider() {
-    g_selectedSegments = Number(segSlider.value);
-  }
+  // updateColorFromSliders();
+  // updateSizeFromSlider();
+  // updateSegmentsFromSlider();
 
-  updateColorFromSliders();
-  updateSizeFromSlider();
-  updateSegmentsFromSlider();
-
-  redSlider.addEventListener('input', updateColorFromSliders);
-  greenSlider.addEventListener('input', updateColorFromSliders);
-  blueSlider.addEventListener('input', updateColorFromSliders);
-  sizeSlider.addEventListener('input', updateSizeFromSlider);
-  segSlider.addEventListener('input', updateSegmentsFromSlider);
+  // redSlider.addEventListener('input', updateColorFromSliders);
+  // greenSlider.addEventListener('input', updateColorFromSliders);
+  // blueSlider.addEventListener('input', updateColorFromSliders);
+  // sizeSlider.addEventListener('input', updateSizeFromSlider);
+  // segSlider.addEventListener('input', updateSegmentsFromSlider);
 }
 
-function handleClicks() {
-  // Register function (event handler) to be called on a mouse press
-  canvas.onmousedown = click;
+// function handleClicks() {
+//   // Register function (event handler) to be called on a mouse press
+//   canvas.onmousedown = click;
 
-  canvas.onmousemove = function (ev) {
-    if (g_mode !== "PAINT") return;
-    if (ev.buttons == 1) {
-      click(ev);
-    }
-  }
-}
+//   canvas.onmousemove = function (ev) {
+//     if (g_mode !== "PAINT") return;
+//     if (ev.buttons == 1) {
+//       click(ev);
+//     }
+//   }
+// }
 
 function renderOneShape(shape) {
   shape.render();
@@ -216,11 +215,17 @@ function main() {
   // Clear <canvas>
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  renderAllShapes();
+  //renderAllShapes();
+  requestAnimationFrame(tick);
 }
 
+var g_startTime = performance.now()/1000.0;
+varg_seconds = performance.now()/1000.0 - g_startTime;
+
 function tick() {
-  console.log(performance.now());
+  g_seconds = performance.now()/1000.0 - g_startTime;
+  
+  console.log(g_seconds);
 
   renderAllShapes();
 
@@ -261,13 +266,23 @@ function renderAllShapes(){
   body.matrix.scale(0.5, 0.5, 0.8);
   body.render();
 
+  var wool = new Cube();
+  wool.color = [1, 1, 1, 1];
+  wool.matrix = new Matrix4(bodyCoords);
+  wool.matrix.scale(0.65, 0.65, 0.65);
+  wool.render();
+
   var neck = new Cube();
   neck.color = [1, 1, 1, 1];
   neck.matrix = new Matrix4(bodyCoords);
-  neck.matrix.translate(0, 0.15, -0.25);
+  neck.matrix.translate(0, 0.25, -0.35);
 
   neck.matrix.translate(0.5, 0.0, 0.0);
-  neck.matrix.rotate(g_rotateNeck, 1, 0, 0);
+  if(g_modelAnimation){
+  neck.matrix.rotate(15*Math.sin(g_seconds * 4) - 30, 1, 0, 0);
+  } else {
+    neck.matrix.rotate(g_rotateNeck, 1, 0, 0);
+  }
   neck.matrix.translate(-0.5, -0.0, -0.0);
 
   neck.matrix.scale(0.45, 0.5, 0.35);
@@ -285,7 +300,8 @@ function renderAllShapes(){
   var face = new Cube();
   face.color = [0.6, 0.6, 0.6, 1];
   face.matrix = new Matrix4(headCoords);
-  face.matrix.translate(0, -0.05, -0.5);
+  face.matrix.rotate(350, 1, 0, 0, 0);
+  face.matrix.translate(0, -0.05, -0.45);
   face.matrix.scale(0.9, 0.65, 1.2);
   var faceCoords = new Matrix4(face.matrix);
   face.render();
@@ -298,17 +314,17 @@ function renderAllShapes(){
   eyes.render();
 
   var earL = new Cube();
-  earL.color = [1, 1, 1, 1];
+  earL.color = [0.6, 0.6, 0.6, 1];
   earL.matrix = new Matrix4(faceCoords);
-  earL.matrix.translate(-0.65, 0.3, 0.3);
+  earL.matrix.translate(-0.65, 0.18, 0.17);
   earL.matrix.rotate(25, 0, 0, 1);
   earL.matrix.scale(0.8, 0.4, 0.4);
   earL.render();
 
   var earR = new Cube();
-  earR.color = [1, 1, 1, 1];
+  earR.color = [0.6, 0.6, 0.6, 1];
   earR.matrix = new Matrix4(faceCoords);
-  earR.matrix.translate(0.65, 0.3, 0.3);
+  earR.matrix.translate(0.65, 0.18, 0.17);
   earR.matrix.rotate(335, 0, 0, 1);
   earR.matrix.scale(0.8, 0.4, 0.4);
   earR.render();
@@ -322,27 +338,58 @@ function renderAllShapes(){
 
   let bodyCoords2 = new Matrix4(body.matrix);
 
+  const stride = 18;
+  const speed = 5;
+  const t = g_seconds * speed;
+
   let legFL = new Matrix4(bodyCoords2);
   legFL.translate(-0.33, -0.6, -0.37);
-  drawLeg(legFL);
+  if(g_modelAnimation){
+    drawLeg(legFL, stride*Math.cos(t));
+  } else {
+    drawLeg(legFL, 0);
+  }
 
   let legFR = new Matrix4(bodyCoords2);
   legFR.translate(0.33, -0.6, -0.37);
-  drawLeg(legFR);
+  if(g_modelAnimation){
+    drawLeg(legFR, stride*Math.sin(t+Math.PI));
+  } else {
+    drawLeg(legFR, 0);
+  }
 
   let legBL = new Matrix4(bodyCoords2);
   legBL.translate(-0.33, -0.6, 0.37);
-  drawLeg(legBL);
+  if(g_modelAnimation){
+    drawLeg(legBL, stride*Math.sin(t+Math.PI));
+  } else {
+    drawLeg(legBL, 0);
+  }
 
   let legBR = new Matrix4(bodyCoords2);
   legBR.translate(0.33, -0.6, 0.37);
-  drawLeg(legBR);
+  if(g_modelAnimation){
+  drawLeg(legBR, stride*Math.cos(t));
+  } else {
+    drawLeg(legBR, 0);
+  }
 
   var tail = new Cube();
   tail.color = [1,1,1,1];
-  tail.matrix.translate(0.0, 0.15, 0.62);
-  tail.matrix.rotate(45, 1, 0, 0);
-  tail.matrix.scale(0.2, 0.1, 0.15);
+  tail.matrix = new Matrix4(bodyCoords2)
+
+  tail.matrix.translate(0.0, 0.33, 0.5);
+
+  if(g_modelAnimation){
+  tail.matrix.rotate(15*Math.sin(g_seconds * 10), 0, 1, 0);
+  } else {
+    tail.matrix.rotate(0, 0, 1, 0);
+  }
+  tail.matrix.rotate(120, 1, 0, 0);
+
+  tail.matrix.scale(0.5, 0.25, 0.25);
+  
+
   tail.render();
 
 }
@@ -354,24 +401,38 @@ function drawCube(color, matrix){
   c.render();
 }
 
-function drawLeg(baseMat) {
+function drawLeg(baseMat, hipAngleDeg) {
   const upperColor = [1,1,1,1];
   const lowerColor = [1,1,1,1];
   const footColor = [0.3, 0.3, 0.3, 1];
 
-  let upper = new Matrix4(baseMat);
-  var upperCoords = new Matrix4(upper);
+  let hip = new Matrix4(baseMat);
+  hip.rotate(hipAngleDeg, 1, 0, 0);
+
+  var upperCoords = new Matrix4(hip);
+  let upper = new Matrix4(hip);
   upper.scale(0.35, 0.4, 0.25);
   drawCube(upperColor, upper);
 
-  let lower = new Matrix4(upperCoords);
-  lower.translate(0, -0.23, 0);
-  var lowerCoords = new Matrix4(lower);
+  const forward = Math.max(0, hipAngleDeg);
+  const kneeAngle = -forward * 0.7;
+
+  let knee = new Matrix4(upperCoords);
+  knee.translate(0, -0.23, 0);
+  knee.rotate(kneeAngle, 1, 0, 0);
+
+  let lowerCoords = new Matrix4(knee);
+  let lower = new Matrix4(knee);
   lower.scale(0.25, 0.35, 0.15);
   drawCube(lowerColor, lower);
 
-  let foot = new Matrix4(lowerCoords);
-  foot.translate(0, -0.25, 0);
+  const ankleAngle = -(hipAngleDeg + kneeAngle) * 0.35;
+
+  let ankle = new Matrix4(lowerCoords);
+  ankle.translate(0, -0.25, 0);
+  ankle.rotate(ankleAngle, 1, 0, 0);
+
+  let foot = new Matrix4(ankle);
   foot.scale(0.25, 0.15, 0.1);
   drawCube(footColor, foot);
 
