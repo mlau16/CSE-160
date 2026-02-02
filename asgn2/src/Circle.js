@@ -11,9 +11,6 @@ class Circle {
             this.color[0], this.color[1], this.color[2], this.color[3]
         );
 
-        let M = new Matrix4();
-        gl.uniformMatrix4fv(u_ModelMatrix, false, M.elements);
-
         const x = this.position[0];
         const y = this.position[1];
 
