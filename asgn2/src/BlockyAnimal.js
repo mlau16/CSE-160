@@ -54,6 +54,13 @@ let g_rotateNeck = 0;
 
 let g_modelAnimation = false;
 
+let g_mouseRotX = 0;
+let g_mouseRotY = 0;
+
+let g_isDragging = false;
+let g_lastX = 0;
+let g_lastY = 0;
+
 function setupWebGL(){
    // Retrieve <canvas> element
   canvas = document.getElementById('webgl');
@@ -199,6 +206,33 @@ function addActionsForHtmlUI() {
 //   }
 // }
 
+function addMouseControls() {
+  canvas.onmousedown = (ev) => {
+    g_isDragging = true;
+    g_lastX = ev.clientX;
+    g_lastY = ev.clientY;
+  };
+
+  canvas.onmouseup = () => { g_isDragging = false; };
+  canvas.onmouseleave = () => { g_isDragging = false; };
+
+  canvas.onmousemove = (ev) => {
+    if (!g_isDragging) return;
+
+    const dx = ev.clientX - g_lastX;
+    const dy = ev.clientY - g_lastY;
+
+    g_lastX = ev.clientX;
+    g_lastY = ev.clientY;
+
+    const sens = 0.4;
+
+    g_mouseRotY -= dx * sens;
+    g_mouseRotX -= dy * sens;
+
+  }
+}
+
 function renderOneShape(shape) {
   shape.render();
 }
@@ -207,6 +241,7 @@ function main() {
   if(!setupWebGL()) return;
   connectVariablesToGLSL();
   addActionsForHtmlUI();
+  addMouseControls();
 
   // Specify the color for clearing <canvas>
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -249,6 +284,10 @@ function renderAllShapes(){
 
   let globalRotMat = new Matrix4();
   globalRotMat.rotate(g_globalAngle, 0, 1, 0);
+
+  globalRotMat.rotate(g_mouseRotY, 0, 1, 0);
+  globalRotMat.rotate(g_mouseRotX, 1, 0, 0);
+
   gl.uniformMatrix4fv(u_GlobalRotateMatrix, false, globalRotMat.elements);
 
   // var len = g_shapesList.length;
