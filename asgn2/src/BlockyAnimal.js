@@ -61,6 +61,21 @@ let g_isDragging = false;
 let g_lastX = 0;
 let g_lastY = 0;
 
+let g_pokeActive = false;
+let g_pokeStart = 0;
+let g_pokeDuration = 2;
+
+let g_explodeDirs = null;
+
+let g_perfLast = performance.now();
+let g_perfFrames = 0;
+let g_perfFps = 0;
+let g_perfMs = 0;
+
+let g_unitCube = null;
+let g_torus = null;
+let g_sphere = null;
+
 function setupWebGL(){
    // Retrieve <canvas> element
   canvas = document.getElementById('webgl');
@@ -194,7 +209,7 @@ function addActionsForHtmlUI() {
   // segSlider.addEventListener('input', updateSegmentsFromSlider);
 }
 
-// function handleClicks() {
+ //function handleClicks() {
 //   // Register function (event handler) to be called on a mouse press
 //   canvas.onmousedown = click;
 
@@ -204,15 +219,21 @@ function addActionsForHtmlUI() {
 //       click(ev);
 //     }
 //   }
-// }
+ //}
 
 function addMouseControls() {
+
   canvas.onmousedown = (ev) => {
+    if(ev.shiftKey) {
+      triggerPoke();
+      ev.preventDefault();
+      return;
+    }
+
     g_isDragging = true;
     g_lastX = ev.clientX;
     g_lastY = ev.clientY;
-  };
-
+  }
   canvas.onmouseup = () => { g_isDragging = false; };
   canvas.onmouseleave = () => { g_isDragging = false; };
 
@@ -233,6 +254,27 @@ function addMouseControls() {
   }
 }
 
+function triggerPoke(){
+  g_pokeActive = true;
+  g_pokeStart = g_seconds;
+
+  g_explodeDirs = {
+    body: randDir(), wool: randDir(), neck: randDir(), head: randDir(),
+    face: randDir(), eyes: randDir(), earL: randDir(), earR: randDir(),
+    nose: randDir(),
+    legFL: randDir(), legFR: randDir(), legBL: randDir(), legBR: randDir(),
+    tail: randDir(), ring: randDir(), bell: randDir()
+  };
+}
+
+function randDir() {
+  let x = (Math.random()*2 - 1);
+  let y = (Math.random()*2 - 0.2);
+  let z = (Math.random()*2 - 1);
+  const len = Math.hypot(x,y,z) || 1;
+  return [x/len, y/len, z/len];
+}
+
 function renderOneShape(shape) {
   shape.render();
 }
@@ -250,6 +292,10 @@ function main() {
   // Clear <canvas>
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+  g_unitCube = new Cube();
+  g_torus = new Torus();
+  g_sphere = new Sphere();
+
   //renderAllShapes();
   requestAnimationFrame(tick);
 }
@@ -262,7 +308,29 @@ function tick() {
   
   console.log(g_seconds);
 
+  if(g_pokeActive && (g_seconds - g_pokeStart) > g_pokeDuration) {
+    g_pokeActive = false;
+    g_explodeDirs = null;
+  }
+
+  const start = performance.now();
   renderAllShapes();
+  const end = performance.now();
+
+  g_perfMs = 0.9 * g_perfMs + 0.1 * (end - start);
+
+  g_perfFrames++;
+  const now = performance.now();
+  if(now - g_perfLast >= 250) {
+    g_perfFps = (g_perfFrames * 1000) / (now - g_perfLast);
+    g_perfFrames = 0;
+    g_perfLast = now;
+
+    const perfDiv = document.getElementById("perf");
+    if(perfDiv) {
+      perfDiv.innerText = `FPS: ${g_perfFps.toFixed(1)} | ms/frame: ${g_perfMs.toFixed(2)}`;
+    }
+  }
 
   requestAnimationFrame(tick);
 }
@@ -278,6 +346,23 @@ function convertCoordinatesEventToGL(ev) {
   return([x,y]);
 }
 
+function applyExplosion(mat, dir, strength) {
+  if (!g_pokeActive || !dir) return;
+
+  const t = (g_seconds - g_pokeStart) / g_pokeDuration;
+  const clamped = Math.max(0, Math.min(1, t));
+
+  const ease = 1 - Math.pow(1 - clamped, 3);
+  const grav = 0.6 * clamped * clamped;
+
+  const dx = dir[0] * strength * ease;
+  const dy = dir[1] * strength * ease - grav;
+  const dz = dir[2] * strength * ease;
+
+  mat.translate(dx, dy, dz);
+
+  mat.rotate(360 * ease, dir[0], dir[1], dir[2]);
+}
 function renderAllShapes(){
   // Clear <canvas>
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -287,6 +372,12 @@ function renderAllShapes(){
 
   globalRotMat.rotate(g_mouseRotY, 0, 1, 0);
   globalRotMat.rotate(g_mouseRotX, 1, 0, 0);
+
+  let pokeT = 0;
+  if(g_pokeActive) {
+    pokeT = (g_seconds - g_pokeStart) / g_pokeDuration;
+    pokeT = Math.max(0, Math.min(1, pokeT));
+  }
 
   gl.uniformMatrix4fv(u_GlobalRotateMatrix, false, globalRotMat.elements);
 
@@ -301,10 +392,12 @@ function renderAllShapes(){
   body.translate(0, 0, 0.2);
   body.rotate(g_rotateAngle, 0, 0, 1);
   let bodyCoords = new Matrix4(body);
+  applyExplosion(body, g_explodeDirs?.body, 1.8);
   body.scale(0.5, 0.45, 0.8);
   drawCube(body, [1,1,1,1]);
 
   let wool = new Matrix4(bodyCoords);
+  applyExplosion(wool, g_explodeDirs?.wool, 1.5);
   wool.scale(0.65, 0.6, 0.6);
   drawCube(wool, [1,1,1,1]);
 
@@ -318,59 +411,68 @@ function renderAllShapes(){
     neck.rotate(g_rotateNeck, 1, 0, 0);
   }
   neck.translate(-0.5, -0.0, -0.0);
+  applyExplosion(neck, g_explodeDirs?.neck, 2);
   neck.scale(0.45, 0.5, 0.35);
   let neckCoords = new Matrix4(neck);
   drawCube(neck, [1,1,1,1]);
 
-  let ring = new Torus();
-  ring.color = [0.7, 0.1, 0.2, 1];
-  ring.matrix = new Matrix4(neckCoords);
-  ring.matrix.translate(0, -0.1, 0);
-  ring.matrix.rotate(170, 1, 0, 0);
-  ring.matrix.scale(1.2,1.2,1.3);
-  let ringCoords = new Matrix4(ring.matrix);
-  ring.render();
+  g_torus = new Torus();
+  g_torus.color = [0.7, 0.1, 0.2, 1];
+  g_torus.matrix = new Matrix4(neckCoords);
+  g_torus.matrix.translate(0, -0.1, 0);
+  g_torus.matrix.rotate(170, 1, 0, 0);
+  applyExplosion(g_torus.matrix, g_explodeDirs?.ring, 1.9);
+  g_torus.matrix.scale(1.2,1.2,1.3);
+  let ringCoords = new Matrix4(g_torus.matrix);
+  g_torus.render();
 
-  let bell = new Sphere();
-  bell.color = [0.8, 0.7, 0.2, 1];
-  bell.matrix = new Matrix4(ringCoords);
-  bell.matrix.translate(0, 0.15, 0.5);
-  bell.matrix.scale(0.5, 0.5, 0.5);
-  bell.render();
+  g_sphere = new Sphere();
+  g_sphere.color = [0.8, 0.7, 0.2, 1];
+  g_sphere.matrix = new Matrix4(ringCoords);
+  g_sphere.matrix.translate(0, 0.15, 0.5);
+  applyExplosion(g_sphere.matrix, g_explodeDirs?.bell, 1.7);
+  g_sphere.matrix.scale(0.5, 0.5, 0.5);
+  g_sphere.render();
 
   let head = new Matrix4(neckCoords);
   head.translate(0, 0.25, -0.1);
+  applyExplosion(head, g_explodeDirs?.head, 2);
   head.scale(0.8, 0.7, 1);
   let headCoords = new Matrix4(head);
   drawCube(head, [1,1,1,1]);
 
   let face = new Matrix4(headCoords);
-  face.rotate(350, 1, 0, 0, 0);
+  face.rotate(350, 1, 0, 0);
   face.translate(0, -0.05, -0.45);
+  applyExplosion(face, g_explodeDirs?.face, 2.2);
   face.scale(0.9, 0.65, 1.2);
   let faceCoords = new Matrix4(face);
   drawCube(face, [0.6, 0.6, 0.6, 1]);
 
   eyes = new Matrix4(faceCoords);
   eyes.translate(0.0, 0.2, -0.15);
+  applyExplosion(eyes, g_explodeDirs?.eyes, 2);
   eyes.scale(1.05, 0.2, 0.15);
   drawCube(eyes, [0,0,0,1]);
 
   earL = new Matrix4(faceCoords);
   earL.translate(-0.65, 0.18, 0.17);
   earL.rotate(25, 0, 0, 1);
+  applyExplosion(earL, g_explodeDirs?.earL, 1.9);
   earL.scale(0.8, 0.4, 0.4);
   drawCube(earL, [0.6,0.6,0.6,1]);
 
   earR = new Matrix4(faceCoords);
   earR.translate(0.65, 0.18, 0.17);
   earR.rotate(335, 0, 0, 1);
+  applyExplosion(earR, g_explodeDirs?.earR, 1.9);
   earR.scale(0.8, 0.4, 0.4);
   drawCube(earR, [0.6, 0.6, 0.6, 1]);
 
   nose = new Matrix4(faceCoords);
   nose.translate(0, 0.2, -0.45);
   nose.scale(0.4, 0.2, 0.2);
+  applyExplosion(nose, g_explodeDirs?.nose, 1.8);
   drawCube(nose, [0,0,0,1]);
 
   let bodyCoords2 = new Matrix4(body);
@@ -382,32 +484,40 @@ function renderAllShapes(){
   let legFL = new Matrix4(bodyCoords2);
   legFL.translate(-0.33, -0.6, -0.37);
   if(g_modelAnimation){
+    applyExplosion(legFL, g_explodeDirs?.legFL, 2);
     drawLeg(legFL, stride*Math.cos(t));
   } else {
+    applyExplosion(legFL, g_explodeDirs?.legFL, 2);
     drawLeg(legFL, 0);
   }
 
   let legFR = new Matrix4(bodyCoords2);
   legFR.translate(0.33, -0.6, -0.37);
   if(g_modelAnimation){
+    applyExplosion(legFR, g_explodeDirs?.legFR, 2);
     drawLeg(legFR, stride*Math.sin(t+Math.PI));
   } else {
+    applyExplosion(legFR, g_explodeDirs?.legFR, 2);
     drawLeg(legFR, 0);
   }
 
   let legBL = new Matrix4(bodyCoords2);
   legBL.translate(-0.33, -0.6, 0.37);
   if(g_modelAnimation){
+    applyExplosion(legBL, g_explodeDirs?.legBL, 2);
     drawLeg(legBL, stride*Math.sin(t+Math.PI));
   } else {
+    applyExplosion(legBL, g_explodeDirs?.legBL, 2);
     drawLeg(legBL, 0);
   }
 
   let legBR = new Matrix4(bodyCoords2);
   legBR.translate(0.33, -0.6, 0.37);
   if(g_modelAnimation){
-  drawLeg(legBR, stride*Math.cos(t));
+    applyExplosion(legBR, g_explodeDirs?.legBR, 2);
+    drawLeg(legBR, stride*Math.cos(t));
   } else {
+    applyExplosion(legBR, g_explodeDirs?.legBR, 2);
     drawLeg(legBR, 0);
   }
 
@@ -421,7 +531,7 @@ function renderAllShapes(){
     tail.rotate(0, 0, 1, 0);
   }
   tail.rotate(120, 1, 0, 0);
-
+  applyExplosion(tail, g_explodeDirs?.tail, 1.8);
   tail.scale(0.5, 0.25, 0.25);
   
   drawCube(tail, [1,1,1,1]);
@@ -429,10 +539,9 @@ function renderAllShapes(){
 }
 
 function drawCube(matrix, color){
-  const c = new Cube();
-  c.matrix = matrix;
-  c.color = color;
-  c.render();
+  g_unitCube.matrix = matrix;
+  g_unitCube.color = color;
+  g_unitCube.render();
 }
 
 function drawLeg(baseMat, hipAngleDeg) {
