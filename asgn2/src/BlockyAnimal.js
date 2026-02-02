@@ -51,6 +51,7 @@ let u_GlobalRotateMatrix;
 
 let g_rotateAngle = 0;
 let g_rotateNeck = 0;
+let g_rotateHead = 0;
 
 let g_modelAnimation = false;
 
@@ -177,6 +178,16 @@ function addActionsForHtmlUI() {
     g_rotateAngle = this.value;
     renderAllShapes();
   });
+
+  document.getElementById('neckSlide').addEventListener('input', function () {
+    g_rotateNeck = this.value;
+    renderAllShapes();
+  });
+  
+  document.getElementById('headSlide').addEventListener('input', function () {
+    g_rotateHead = this.value;
+    renderAllShapes();
+  })
 
   // clearButton.onclick = function () {
   //   g_shapesList = [];
@@ -416,7 +427,6 @@ function renderAllShapes(){
   let neckCoords = new Matrix4(neck);
   drawCube(neck, [1,1,1,1]);
 
-  g_torus = new Torus();
   g_torus.color = [0.7, 0.1, 0.2, 1];
   g_torus.matrix = new Matrix4(neckCoords);
   g_torus.matrix.translate(0, -0.1, 0);
@@ -426,7 +436,6 @@ function renderAllShapes(){
   let ringCoords = new Matrix4(g_torus.matrix);
   g_torus.render();
 
-  g_sphere = new Sphere();
   g_sphere.color = [0.8, 0.7, 0.2, 1];
   g_sphere.matrix = new Matrix4(ringCoords);
   g_sphere.matrix.translate(0, 0.15, 0.5);
@@ -438,6 +447,7 @@ function renderAllShapes(){
   head.translate(0, 0.25, -0.1);
   applyExplosion(head, g_explodeDirs?.head, 2);
   head.scale(0.8, 0.7, 1);
+  head.rotate(g_rotateHead, 1, 0, 0);
   let headCoords = new Matrix4(head);
   drawCube(head, [1,1,1,1]);
 
