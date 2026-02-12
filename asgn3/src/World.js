@@ -2,38 +2,56 @@
 // Vertex shader program
 var VSHADER_SOURCE = `
   attribute vec4 a_Position;
+  attribute vec2 a_UV;
 
   uniform mat4 u_ModelMatrix;
   uniform mat4 u_ViewMatrix;
   uniform mat4 u_ProjectionMatrix;
 
+  varying vec2 v_UV;
+
   void main() {
     gl_Position = u_ProjectionMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
-  }`
+    v_UV = a_UV;
+  }`;
 
 // Fragment shader program
 var FSHADER_SOURCE =`
   precision mediump float;
+
+  uniform sampler2D u_Sampler;
   uniform vec4 u_FragColor;
+  uniform float u_texColorWeight;
+ 
+  varying vec2 v_UV;
+
   void main() {
-    gl_FragColor = u_FragColor;
-  }`
+    vec4 texColor = texture2D(u_Sampler, v_UV);
+    float t = u_texColorWeight;
+    gl_FragColor = (1.0 - t) * u_FragColor + t * texColor;
+  }`;
 
 var g_shapesList = [];
 
 let canvas;
-let gl;
-let a_Position;
+var gl;
+var a_Position;
 
-let u_FragColor;
+var a_UV;
+
+var u_FragColor;
 let g_selectedColor = [1.0, 1.0, 1.0, 1.0];
 
-let u_ModelMatrix;
+var u_ModelMatrix;
 let u_ViewMatrix;
 let u_ProjectionMatrix;
 
-let g_vertexBuffer = null;
+var u_texColorWeight;
+
+var g_vertexBuffer = null;
 let g_selectedType = "POINT";
+
+var g_uvBuffer = null;
 
 let g_selectedSegments = 20;
 
@@ -60,12 +78,20 @@ let g_sphere = null;
 
 let g_prevTime = performance.now()/1000.0;
 
+let u_Sampler;
+let g_texture0 = null;
+let g_textureReady = false;
+
 const keys = Object.create(null);
 const cam = {
   pos: [0, 1.5, 6],
   yaw: 0,
   pitch: 0
 };
+
+const WORLD_W = 32;
+const WORLD_D = 32;
+let worldHeights = [];
 
 function setupWebGL(){
    // Retrieve <canvas> element
@@ -89,10 +115,19 @@ function connectVariablesToGLSL(){
     return;
   }
 
-  // // Get the storage location of a_Position
+  gl.useProgram(gl.program);
+
+  // Get the storage location of a_Position
   a_Position = gl.getAttribLocation(gl.program, 'a_Position');
   if (a_Position < 0) {
     console.log('Failed to get the storage location of a_Position');
+    return;
+  }
+
+  // Get the storage location of a_UV
+  a_UV = gl.getAttribLocation(gl.program, 'a_UV');
+  if (a_UV < 0) {
+    console.log('Failed to get the storage location of a_UV');
     return;
   }
 
@@ -110,6 +145,8 @@ function connectVariablesToGLSL(){
     return;
   }
 
+   u_texColorWeight = gl.getUniformLocation(gl.program, 'u_texColorWeight');
+
   // Get the storage location of u_ViewMatrix
   u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix');
   if(!u_ViewMatrix) {
@@ -123,11 +160,24 @@ function connectVariablesToGLSL(){
     return;
   }
 
-  g_vertexBuffer = gl.createBuffer();
-  if(!g_vertexBuffer) {
+  u_Sampler = gl.getUniformLocation(gl.program, 'u_Sampler');
+  if (!u_Sampler) {
+    console.log('Failed to get the storage locationof u_Sampler');
+    return;
+  }
+
+  window.g_vertexBuffer = gl.createBuffer();
+  if(!window.g_vertexBuffer) {
     console.log('Failed to create the buffer object');
     return;
   }
+
+  window.g_uvBuffer = gl.createBuffer();
+  if (!window.g_uvBuffer) {
+    console.log('Failed to create the UV buffer object');
+    return;
+  }
+
 
   let identity = new Matrix4();
   let view = new Matrix4();
@@ -195,6 +245,8 @@ function renderOneShape(shape) {
 function main() {
   if(!setupWebGL()) return;
   connectVariablesToGLSL();
+  if (!gl.program) return; 
+  initTextures();
   initInput();
   addActionsForHtmlUI();
 
@@ -209,6 +261,8 @@ function main() {
   g_torus = new Torus();
   g_sphere = new Sphere();
 
+  initWorld();
+
   //renderAllShapes();
   requestAnimationFrame(tick);
 }
@@ -222,7 +276,7 @@ function tick() {
   g_prevTime = now;
   g_seconds = now - g_startTime;
   
-  console.log(g_seconds);
+  //console.log(g_seconds);
 
   const start = performance.now();
   updateCamera(dt);
@@ -258,12 +312,96 @@ function convertCoordinatesEventToGL(ev) {
   return([x,y]);
 }
 
+function initTextures() {
+  g_texture0 = gl.createTexture();
+  if(!g_texture0) {
+    console.log('Faled to create the texture object');
+    return false;
+  }
+
+  const image = new Image();
+  image.onload = function() {
+    loadTexture(g_texture0, u_Sampler, image);
+    g_textureReady = true;
+  };
+
+  image.src = "img/sky.jpg";
+
+  return true;
+}
+
+function loadTexture(texture, sample, image) {
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+
+  gl.uniform1i(sample, 0);
+}
+
+function initWorld() {
+  worldHeights = [];
+  const cx = WORLD_W /2;
+  const cz = WORLD_D /2;
+
+  for (let z = 0; z < WORLD_D; z++) {
+    const row = [];
+    for (let x = 0; x < WORLD_W; x++) {
+      const dx = x - cx;
+      const dz = z - cz;
+      const d = Math.sqrt(dx*dx + dz*dz);
+
+      let h = Math.floor((d-9) / 4);
+      h = Math.max(0, Math.min(4,h));
+
+      if (z > 20) h = Math.max(0, Math.min(4, h + 1));
+
+      row.push(h);
+    }
+    worldHeights.push(row);
+  }
+}
+
+function drawWorld() {
+  for (let z = 0; z < WORLD_D; z++) {
+    for(let x = 0; x < WORLD_W; x++) {
+      const h = worldHeights[z][x];
+
+      const wx = x - WORLD_W/2;
+      const wz = z - WORLD_D/2;
+
+      if (h === 0) {
+        const w = new Matrix4();
+        w.translate(wx, -0.05, wz);
+        w.scale(1, 0.05, 1);
+        drawCube(w, [0.1, 0.3, 0.8, 1]);
+        continue;
+      }
+
+      for (let y = 0; y < h; y++) {
+        const m = new Matrix4();
+        m.translate(wx, y, wz);
+
+        const c = (y === h - 1) ? [0.2, 0.7, 0.2, 1] : [0.45, 0.45, 0.45, 1];
+        drawCube(m, c);
+      }
+    }
+  }
+}
+
 function renderAllShapes(){
   // Clear <canvas>
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   let proj = new Matrix4();
-  proj.setPerspective(60, canvas.width / canvas.height, 0.1, 100);
+  proj.setPerspective(60, canvas.width / canvas.height, 0.1, 300);
   gl.uniformMatrix4fv(u_ProjectionMatrix, false, proj.elements);
 
   const f = getForward(cam.yaw, cam.pitch);
@@ -274,6 +412,10 @@ function renderAllShapes(){
     0,1,0
   );
   gl.uniformMatrix4fv(u_ViewMatrix, false, view.elements);
+
+  drawSky();
+  drawGround();
+  drawWorld();
 
   let body = new Matrix4();
   body.translate(0, 0, 0.2);
@@ -288,39 +430,18 @@ function drawCube(matrix, color){
   g_unitCube.render();
 }
 
-function drawLeg(baseMat, hipAngleDeg) {
-  const upperColor = [1,1,1,1];
-  const lowerColor = [1,1,1,1];
-  const footColor = [0.3, 0.3, 0.3, 1];
+function drawGround() {
+  const g = new Matrix4();
+  g.translate(0, -0.55, 0);
+  g.scale(32, 0.1, 32);
+  drawCube(g, [0.2, 0.6, 0.2, 1]);
+}
 
-  let hip = new Matrix4(baseMat);
-  hip.rotate(hipAngleDeg, 1, 0, 0);
-
-  let upper = new Matrix4(hip);
-  upper.scale(0.35, 0.4, 0.25);
-  drawCube(upper, upperColor);
-
-  const forward = Math.max(0, hipAngleDeg);
-  const kneeAngle = -forward * 0.7;
-
-  let knee = new Matrix4(hip);
-  knee.translate(0, -0.23, 0);
-  knee.rotate(kneeAngle, 1, 0, 0);
-
-  let lower = new Matrix4(knee);
-  lower.scale(0.25, 0.35, 0.15);
-  drawCube(lower, lowerColor);
-
-  const ankleAngle = -(hipAngleDeg + kneeAngle) * 0.35;
-
-  let ankle = new Matrix4(knee);
-  ankle.translate(0, -0.25, 0);
-  ankle.rotate(ankleAngle, 1, 0, 0);
-
-  let foot = new Matrix4(ankle);
-  foot.scale(0.25, 0.15, 0.1);
-  drawCube(foot, footColor);
-
+function drawSky() {
+  const s = new Matrix4();
+  s.translate(cam.pos[0], cam.pos[1], cam.pos[2]);
+  s.scale(120, 120, 120);
+  drawCube(s, [0.05, 0.08, 0.2, 1]);
 }
 
 function updateHUD() { 

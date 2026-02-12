@@ -29,7 +29,7 @@ function drawTriangle(verts) {
 
   const vertices = new Float32Array(verts);
 
-  gl.bindBuffer(gl.ARRAY_BUFFER, g_vertexBuffer);
+  gl.bindBuffer(gl.ARRAY_BUFFER, window.g_vertexBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW);
 
   gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, 0, 0);
@@ -43,11 +43,30 @@ function drawTriangle3D(verts) {
 
   const vertices = new Float32Array(verts);
 
-  gl.bindBuffer(gl.ARRAY_BUFFER, g_vertexBuffer);
+  gl.bindBuffer(gl.ARRAY_BUFFER, window.g_vertexBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW);
 
   gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
   gl.enableVertexAttribArray(a_Position);
 
   gl.drawArrays(gl.TRIANGLES, 0 , n);
+}
+
+function drawTriangle3DUV(verts, uvs) {
+  if (!window.g_vertexBuffer) { console.log("NO g_vertexBuffer"); return; }
+  if (!window.g_uvBuffer)     { console.log("NO g_uvBuffer"); return; }
+  if (a_Position < 0)  { console.log("BAD a_Position", a_Position); return; }
+  if (a_UV < 0)        { console.log("BAD a_UV", a_UV); return; }
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, window.g_vertexBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
+  gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+  gl.enableVertexAttribArray(a_Position);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, window.g_uvBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvs), gl.DYNAMIC_DRAW);
+  gl.vertexAttribPointer(a_UV, 2, gl.FLOAT, false, 0, 0);
+  gl.enableVertexAttribArray(a_UV);
+
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
