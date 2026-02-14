@@ -1,8 +1,8 @@
 class Camera {
     constructor(canvas) {
-        this.fov = 60;
+        this.fov = 45;
 
-        this.eye = new Vector3([0, 1.5, 6]);
+        this.eye = new Vector3([0, 1.0, 6]);
         this.at = new Vector3([0, 1.5, 5]);
         this.up = new Vector3([0, 1, 0]);
 
@@ -93,26 +93,26 @@ class Camera {
         this.panLeft(-alpha);
     }
 
-    panUp(alpha = 3) {
-        let f = new Vector3();
-        f.set(this.at);
-        f.sub(this.eye);
-        f.normalize();
+    // panUp(alpha = 3) {
+    //     let f = new Vector3();
+    //     f.set(this.at);
+    //     f.sub(this.eye);
+    //     f.normalize();
 
-        let right = Vector3.cross(f, this.up);
-        right.normalize();
+    //     let right = Vector3.cross(f, this.up);
+    //     right.normalize();
 
-        let rot = new Matrix4();
-        rot.setRotate(alpha, right.elements[0], right.elements[1], right.elements[2]);
+    //     let rot = new Matrix4();
+    //     rot.setRotate(alpha, right.elements[0], right.elements[1], right.elements[2]);
 
-        let fPrime = rot.multiplyVector3(f);
+    //     let fPrime = rot.multiplyVector3(f);
 
-        this.at.set(this.eye);
-        this.at.add(fPrime);
-        this.updateView();
-    }
+    //     this.at.set(this.eye);
+    //     this.at.add(fPrime);
+    //     this.updateView();
+    // }
 
-    panDown(alpha = 3) {
-        this.panUp(-alpha);
-    }
+    // panDown(alpha = 3) {
+    //     this.panUp(-alpha);
+    // }
 }

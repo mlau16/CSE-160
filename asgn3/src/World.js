@@ -3,6 +3,7 @@
 var VSHADER_SOURCE = `
   attribute vec4 a_Position;
   attribute vec2 a_UV;
+  attribute vec3 a_Normal;
 
   uniform mat4 u_ModelMatrix;
   uniform mat4 u_ViewMatrix;
@@ -10,11 +11,13 @@ var VSHADER_SOURCE = `
 
   varying vec2 v_UV;
   varying vec3 v_WorldPos;
+  varying vec3 v_Normal;
 
   void main() {
     gl_Position = u_ProjectionMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
     v_UV = a_UV;
     v_WorldPos = (u_ModelMatrix * a_Position).xyz;
+    v_Normal = normalize((u_ModelMatrix * vec4(a_Normal, 0.0)).xyz);
   }`;
 
 // Fragment shader program
@@ -24,18 +27,30 @@ var FSHADER_SOURCE =`
   uniform sampler2D u_Sampler;
   uniform vec4 u_FragColor;
   uniform float u_texColorWeight;
-
   uniform float u_Time;
   uniform vec3 u_CamPos;
   uniform float u_IsWater;
+  uniform vec3 u_LightDir;
+  uniform float u_LightIntensity;
+
   varying vec3 v_WorldPos;
- 
   varying vec2 v_UV;
+  varying vec3 v_Normal;
 
   void main() {
     vec4 texColor = texture2D(u_Sampler, v_UV);
     float t = u_texColorWeight;
     vec4 base = (1.0 - t) * u_FragColor + t * texColor;
+
+    vec3 N = normalize(v_Normal);
+    vec3 L = normalize(u_LightDir);
+
+    float ndotl = max(dot(N, L), 0.0);
+    float ambient = 0.25;
+    float diff = 0.8 * ndotl;
+
+    float lit = ambient + u_LightIntensity * diff;
+    lit = clamp(lit, 0.0, 1.0);
 
     if (u_IsWater > 0.5) {
       vec2 uv = v_UV;
@@ -50,11 +65,11 @@ var FSHADER_SOURCE =`
       float fresnel = pow(1.0 - abs(V.y), 3.0);
 
       vec4 skyTint = vec4(0.15, 0.20, 0.35, 1.0);
-
       vec4 watery = mix(ripBase, skyTint, fresnel * 0.75);
-      gl_FragColor = watery;
+
+      gl_FragColor = vec4(watery.rgb * lit, watery.a);
     } else {
-      gl_FragColor = base;
+      gl_FragColor = vec4(base.rgb * lit, base.a);
     }
   }`;
 
@@ -65,6 +80,7 @@ var gl;
 var a_Position;
 
 var a_UV;
+var a_Normal;
 
 var u_FragColor;
 let g_selectedColor = [1.0, 1.0, 1.0, 1.0];
@@ -133,6 +149,8 @@ function setupWebGL(){
     return false;
   }
   gl.enable(gl.DEPTH_TEST);
+  gl.enable(gl.CULL_FACE);
+  gl.cullFace(gl.BACK);
   return true;
 
 }
@@ -160,6 +178,13 @@ function connectVariablesToGLSL(){
     return;
   }
 
+  a_Normal = gl.getAttribLocation(gl.program, "a_Normal");
+  if (a_Normal < 0) {
+    console.log("Failed to get the storage location of a_Normal");
+    return;
+  }
+
+
   // Get the storage location of u_FragColor
   u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor');
   if (!u_FragColor) {
@@ -179,6 +204,9 @@ function connectVariablesToGLSL(){
    u_Time = gl.getUniformLocation(gl.program, "u_Time");
    u_CamPos = gl.getUniformLocation(gl.program, "u_CamPos");
    u_IsWater = gl.getUniformLocation(gl.program, "u_IsWater");
+
+   u_LightDir = gl.getUniformLocation(gl.program, "u_LightDir");
+   u_LightIntensity = gl.getUniformLocation(gl.program, "u_LightIntensity");
 
   // Get the storage location of u_ViewMatrix
   u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix');
@@ -225,6 +253,8 @@ function connectVariablesToGLSL(){
   gl.uniform3f(u_CamPos, 0.0, 0.0, 0.0);
   gl.uniform1f(u_IsWater, 0.0);
 
+  gl.uniform3f(u_LightDir, -0.3, 1.0, 0.4);
+  gl.uniform1f(u_LightIntensity, 0.9);
 }
 
 function addActionsForHtmlUI() {
@@ -248,7 +278,7 @@ function initInput() {
 }
 
 function updateCamera(dt) {
-  const moveSpeed = 4.0 * dt;
+  const moveSpeed = 2.0 * dt;
   const panDeg = 90 * dt
 
   if(keys["w"]) camera.moveForward(moveSpeed);
@@ -438,10 +468,14 @@ function renderAllShapes(){
   gl.uniform1f(u_IsWater, 0.0);
 
   drawSky();
+  gl.disable(gl.CULL_FACE);
   drawWater();
+  gl.enable(gl.CULL_FACE);
   drawMap(map);
   //drawGround();
   //drawWorld();
+
+  drawBoat();
 
   let body = new Matrix4();
   body.translate(0, 0, 0.2);
@@ -469,7 +503,7 @@ function drawWater() {
   gl.uniform1f(u_IsWater, 1.0);
   gl.uniform1f(u_texColorWeight, 1.0);
 
-  const size = 64;
+  const size = 120;
 
   const m = new Matrix4();
   const e = camera.eye.elements;
@@ -485,49 +519,84 @@ function drawWater() {
 function drawSky() {
   if (!g_textureReady) return;
 
+  gl.disable(gl.CULL_FACE);
+  gl.uniform1f(u_IsWater, 0.0)
   gl.uniform1f(u_texColorWeight, 1.0);
 
   const s = new Matrix4();
   const e = camera.eye.elements;
   s.translate(e[0], e[1], e[2]);
-  s.scale(64, 64, 64);
+  s.scale(120, 120, 120);
 
   drawCube(s, [0.05, 0.08, 0.2, 1]);
 
   gl.uniform1f(u_texColorWeight, 0.0);
+  gl.enable(gl.CULL_FACE);
 }
 
 function drawDetails() {
-  const H = 64;
-  const W = 64;
+  const H = 120;
+  const W = 120;
   const m = Array.from({length:H}, () => Array(W).fill(0));
 
   const cx = (W - 1) / 2;
   const cz = (H - 1) / 2;
 
   const waterR = Math.min(W, H) * 0.3;
-  const shoreBand = Math.min(W, H) * 1.2;
+  const shoreBand = Math.min(W, H) * 0.08;
 
   for (let z = 0; z < H; z++) {
     for (let x = 0; x < W; x++) {
       const dx = x - cx;
       const dz = z - cz;
+
       const ang = Math.atan2(dz, dx);
-      
-      const wiggle = 1.5 * Math.sin(ang * 4.0) + 1.0 * Math.sin(ang * 7.0);
+      const wiggle = 2.5 * Math.sin(ang * 4.0) + 1.5 * Math.sin(ang * 7.0);
 
       const d = Math.sqrt(dx * dx + dz * dz);
-
       const shore = waterR + wiggle;
 
       if (d < shore) {
         m[z][x] = 0;
-      } else if (d < shore + shoreBand){
+        continue;
+      } 
+      if (d < shore + shoreBand){
         m[z][x] = 1;
-      } else {
-        const t = (d - (shore + shoreBand));
-        m[z][x] = Math.min(6, 2 + Math.floor(t / 2));
-      }
+        continue;
+      } 
+
+      const t = (d - (shore + shoreBand));
+
+      let inland = t / (Math.min(W,H) * 0.35);
+      inland = Math.max(0, Math.min(1, inland));
+
+      const mountainCenter = Math.min(W, H) * 0.18;
+      const mountainWidth = Math.min(W,H) * 0.20;
+
+      let bandShape = 1.0 - Math.abs((t- mountainCenter) / mountainWidth);
+      bandShape = Math.max(0, Math.min(1, bandShape));
+      bandShape = bandShape * bandShape;
+
+      const base = bandShape
+
+      const n =
+        0.5
+        + 0.25 * Math.sin(x * 0.12) * Math.cos(z * 0.11)
+        + 0.18 * Math.sin((x + z) * 0.07)
+        + 0.10 * Math.sin(x * 0.33 + z * 0.29);
+
+      const ridges = 1.0 - Math.abs(2.0 * n - 1.0);
+
+      const band = Math.max(0, Math.min(1, (inland - 0.25) / 0.75));
+
+      let h =
+        2
+        + base * 10.0          
+        + band * ridges * 12.0   
+        + (n - 0.5) * 2.0;   
+
+      h = Math.max(0, Math.min(15, h));
+      m[z][x] = Math.floor(h);
     }
   }
 
@@ -543,23 +612,130 @@ function drawMap(map) {
       const h = map[z][x];
       if (h <= 0) continue;
 
-      for (let y = 0; y < h; y++) {
         const m = new Matrix4();
-        m.translate(x - W/2, y, z - H/2);
+        m.translate(x - W/2, (h/2) - 0.5, z - H/2);
+        m.scale(1, h, 1);
 
-        const c = (y === h-1) ? [0.08, 0.08, 0.12, 1] : [0.05, 0.05, 0.08, 1];
         gl.uniform1f(u_texColorWeight, 0.0);
-        drawCube(m, c);
-      }
+        drawCube(m, [0.08, 0.08, 0.12, 1]);
+      
     }
   }
 }
 
-function updateHUD() { 
-  const scoreText = document.getElementById('scoreText');
-  const timeText = document.getElementById('timeText');
+function drawBoat() {
+  const e = camera.eye.elements;
+  const a = camera.at.elements;
 
-  if (scoreText) scoreText.innerText = String(g_score);
-  if (timeText) timeText.innerText = g_timeLeft.toFixed(1);
+  const [fx, __, fz] = getCameraForwardFlat();
+
+  const down = 0.9;
+  const bob = 0.05 * Math.sin(g_seconds * 2.0);
+
+
+  const dist = 2.0;
+  const bx = e[0] + fx * dist;
+  const by = (e[1] - down) + bob;
+  const bz = e[2] + fz * dist;
+
+  const yawDeg = 90 + (Math.atan2(fx, fz) * 180 / Math.PI);
+
+  gl.uniform1f(u_IsWater, 0.0);
+  gl.uniform1f(u_texColorWeight, 0.0);
+
+  // --- Hull base (flat rectangle) ---
+  let base = new Matrix4();
+  base.translate(bx, by, bz);
+  base.rotate(yawDeg, 0, 1, 0);
+  base.scale(1.4, 0.1, 0.8);
+  drawCube(base, [0.35, 0.20, 0.10, 1.0]);
+
+  // side1 
+  let side1 = new Matrix4();
+  side1.translate(bx, by + 0.15, bz);
+  side1.rotate(yawDeg, 0, 1, 0);
+  side1.translate(0, -0.05, -0.45);   
+  side1.scale(1.4, 0.18, 0.1);
+  drawCube(side1, [0.32, 0.18, 0.09, 1.0]);
+
+  // side 2
+  let side2 = new Matrix4();
+  side2.translate(bx, by + 0.15, bz);
+  side2.rotate(yawDeg, 0, 1, 0);
+  side2.translate(0, -0.05, 0.45);    
+  side2.scale(1.4, 0.18, 0.1);
+  drawCube(side2, [0.32, 0.18, 0.09, 1.0]);
+
+  // --- Cabin/seat ---
+  let seat = new Matrix4();
+  seat.translate(bx, by + 0.22, bz);
+  seat.rotate(yawDeg, 0, 1, 0);
+  seat.translate(-0.15, -0.15, 0);
+  seat.scale(0.1, 0.1, 0.8);
+  drawCube(seat, [0.45, 0.28, 0.14, 1.0]);
+
+  // boat tip (back)
+  const tipSteps = 6;
+  for (let i = 0; i < tipSteps; i++) {
+    const t = i / (tipSteps - 1); // 0 -> 1
+    const segW = 1 * (1.0 - 0.85 * t);   // width shrinks
+    const segH = 1 * (1.0 - 0.20 * t);  // slight height shrink
+    const segL = 0.15 * (1.0 - 0.65 * t);   // length shrinks
+    const zOff = 3.0 + i * 0.065;  
+    const yOff = 0.75 + i * 0.85;
+
+
+    let seg = new Matrix4(base);
+    seg.translate(zOff - 2.5, yOff, 0);
+    seg.scale(segL, segH, segW);
+    drawCube(seg, [0.35, 0.20, 0.10, 1.0]);
+  }
+
+  // boat tip (front)
+  for (let i = 0; i < tipSteps; i++) {
+    const t = i / (tipSteps - 1); // 0 -> 1
+    const segW = 1 * (1.0 - 0.85 * t);   // width shrinks
+    const segH = 1 * (1.0 - 0.20 * t);  // slight height shrink
+    const segL = 0.15 * (1.0 - 0.65 * t);   // length shrinks
+    const zOff = 3.0 + i * -0.065;  
+    const yOff = 0.75 + i * 0.85;
+
+
+    let seg2 = new Matrix4(base);
+    seg2.translate(zOff - 3.5, yOff, 0);
+    seg2.scale(segL, segH, segW);
+    drawCube(seg2, [0.35, 0.20, 0.10, 1.0]);
+  }
+
+  // --- Mast ---
+  let mast = new Matrix4();
+  mast.translate(bx, by + 0.65, bz);
+  mast.rotate(yawDeg, 0, 1, 0);
+  mast.translate(0.25, 0, 0);
+  mast.scale(0.08, 1.2, 0.08);
+  drawCube(mast, [0.55, 0.45, 0.25, 1.0]);
+
+  // --- Little lantern block (cute Tangled vibe) ---
+  let lantern = new Matrix4();
+  lantern.translate(bx, by + 1.10, bz);
+  lantern.rotate(yawDeg, 0, 1, 0);
+  lantern.translate(0.25, 0.0, 0);
+  lantern.scale(0.18, 0.18, 0.18);
+  drawCube(lantern, [1.0, 0.85, 0.25, 1.0]);
 }
+
+function getCameraForwardFlat() {
+  const e = camera.eye.elements;
+  const a = camera.at.elements;
+
+  let fx = a[0] - e[0];
+  let fz = a[2] - e[2];
+
+  const len = Math.hypot(fx, fz) || 1.0;
+  fx /= len;
+  fz /= len;
+
+  return [fx, 0, fz];
+}
+
 
