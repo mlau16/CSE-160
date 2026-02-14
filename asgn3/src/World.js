@@ -1,4 +1,4 @@
-// ColoredPoint.js (c) 2012 matsuda
+
 // Vertex shader program
 var VSHADER_SOURCE = `
   attribute vec4 a_Position;
@@ -9,10 +9,12 @@ var VSHADER_SOURCE = `
   uniform mat4 u_ProjectionMatrix;
 
   varying vec2 v_UV;
+  varying vec3 v_WorldPos;
 
   void main() {
     gl_Position = u_ProjectionMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
     v_UV = a_UV;
+    v_WorldPos = (u_ModelMatrix * a_Position).xyz;
   }`;
 
 // Fragment shader program
@@ -22,13 +24,38 @@ var FSHADER_SOURCE =`
   uniform sampler2D u_Sampler;
   uniform vec4 u_FragColor;
   uniform float u_texColorWeight;
+
+  uniform float u_Time;
+  uniform vec3 u_CamPos;
+  uniform float u_IsWater;
+  varying vec3 v_WorldPos;
  
   varying vec2 v_UV;
 
   void main() {
     vec4 texColor = texture2D(u_Sampler, v_UV);
     float t = u_texColorWeight;
-    gl_FragColor = (1.0 - t) * u_FragColor + t * texColor;
+    vec4 base = (1.0 - t) * u_FragColor + t * texColor;
+
+    if (u_IsWater > 0.5) {
+      vec2 uv = v_UV;
+
+      uv.x += 0.02 * sin(uv.y * 30.0 + u_Time * 1.5);
+      uv.y += 0.02 * sin(uv.x * 25.0 + u_Time * 1.2);
+
+      vec4 ripTex = texture2D(u_Sampler, uv);
+      vec4 ripBase = (1.0 - t) * u_FragColor + t * ripTex;
+
+      vec3 V = normalize(u_CamPos - v_WorldPos);
+      float fresnel = pow(1.0 - abs(V.y), 3.0);
+
+      vec4 skyTint = vec4(0.15, 0.20, 0.35, 1.0);
+
+      vec4 watery = mix(ripBase, skyTint, fresnel * 0.75);
+      gl_FragColor = watery;
+    } else {
+      gl_FragColor = base;
+    }
   }`;
 
 var g_shapesList = [];
@@ -83,15 +110,17 @@ let g_texture0 = null;
 let g_textureReady = false;
 
 const keys = Object.create(null);
-const cam = {
-  pos: [0, 1.5, 6],
-  yaw: 0,
-  pitch: 0
-};
 
 const WORLD_W = 32;
 const WORLD_D = 32;
 let worldHeights = [];
+
+let map = drawDetails();
+
+let u_Time, u_CamPos, u_IsWater;
+
+
+let camera;
 
 function setupWebGL(){
    // Retrieve <canvas> element
@@ -147,6 +176,10 @@ function connectVariablesToGLSL(){
 
    u_texColorWeight = gl.getUniformLocation(gl.program, 'u_texColorWeight');
 
+   u_Time = gl.getUniformLocation(gl.program, "u_Time");
+   u_CamPos = gl.getUniformLocation(gl.program, "u_CamPos");
+   u_IsWater = gl.getUniformLocation(gl.program, "u_IsWater");
+
   // Get the storage location of u_ViewMatrix
   u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix');
   if(!u_ViewMatrix) {
@@ -188,6 +221,9 @@ function connectVariablesToGLSL(){
   gl.uniformMatrix4fv(u_ProjectionMatrix, false, proj.elements);
 
   gl.uniform1f(u_texColorWeight, 0.0);
+  gl.uniform1f(u_Time, 0.0);
+  gl.uniform3f(u_CamPos, 0.0, 0.0, 0.0);
+  gl.uniform1f(u_IsWater, 0.0);
 
 }
 
@@ -204,40 +240,24 @@ function initInput() {
   document.addEventListener("mousemove", (e) => {
     if (document.pointerLockElement !== canvas) return;
 
-    const sens = 0.0025;
-    cam.yaw += e.movementX * sens;
-    cam.pitch -= e.movementY * sens;
+    const sens = 0.2;
+    camera.panRight(e.movementX * sens);
+    camera.panDown(e.movementY * sens);
 
-    const maxPitch = Math.PI/2 -0.01;
-    cam.pitch = Math.max(-maxPitch, Math.min(maxPitch, cam.pitch));
   });
 }
 
-function getForward(yaw, pitch) {
-  const cy = Math.cos(yaw), sy = Math.sin(yaw);
-  const cp = Math.cos(pitch), sp = Math.sin(pitch);
-  return [sy*cp, sp, -cy*cp];
-}
-
-function getRight(yaw) {
-  const cy = Math.cos(yaw), sy = Math.sin(yaw);
-  return [cy, 0, sy];
-}
-
 function updateCamera(dt) {
-  const speed = 4.0 * dt;
-  const turn = 2.0 * dt;
-  
-  const f = getForward(cam.yaw, 0);
-  const r = getRight(cam.yaw);
+  const moveSpeed = 4.0 * dt;
+  const panDeg = 90 * dt
 
-  if(keys["w"]) { cam.pos[0] += f[0]*speed; cam.pos[2] += f[2]*speed; }
-  if(keys["s"]) { cam.pos[0] -= f[0]*speed; cam.pos[2] -= f[2]*speed; }
-  if(keys["a"]) { cam.pos[0] -= r[0]*speed; cam.pos[2] -= r[2]*speed; }
-  if(keys["d"]) { cam.pos[0] += r[0]*speed; cam.pos[2] += r[2]*speed; }
+  if(keys["w"]) camera.moveForward(moveSpeed);
+  if(keys["s"]) camera.moveBackwards(moveSpeed);
+  if(keys["a"]) camera.moveLeft(moveSpeed);
+  if(keys["d"]) camera.moveRight(moveSpeed);
 
-  if (keys["q"]) cam.yaw += turn;
-  if (keys["e"]) cam.yaw -= turn;
+  if (keys["q"]) camera.panLeft(panDeg);
+  if (keys["e"]) camera.panRight(panDeg);
 }
 
 function renderOneShape(shape) {
@@ -263,6 +283,8 @@ function main() {
   g_torus = new Torus();
   g_sphere = new Sphere();
 
+  camera = new Camera(canvas);
+
   initWorld();
 
   //renderAllShapes();
@@ -277,6 +299,7 @@ function tick() {
   const dt = now - g_prevTime;
   g_prevTime = now;
   g_seconds = now - g_startTime;
+  
   
   //console.log(g_seconds);
 
@@ -402,22 +425,23 @@ function renderAllShapes(){
   // Clear <canvas>
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  let proj = new Matrix4();
-  proj.setPerspective(60, canvas.width / canvas.height, 0.1, 300);
-  gl.uniformMatrix4fv(u_ProjectionMatrix, false, proj.elements);
+  camera.updateProjection(canvas);
 
-  const f = getForward(cam.yaw, cam.pitch);
-  let view = new Matrix4();
-  view.setLookAt(
-    cam.pos[0],cam.pos[1],cam.pos[2], 
-    cam.pos[0] + f[0],cam.pos[1] + f[1],cam.pos[2] + f[2], 
-    0,1,0
-  );
-  gl.uniformMatrix4fv(u_ViewMatrix, false, view.elements);
+  gl.uniformMatrix4fv(u_ProjectionMatrix, false, camera.projectionMatrix.elements);
+  gl.uniformMatrix4fv(u_ViewMatrix, false, camera.viewMatrix.elements);
+
+  gl.uniform1f(u_Time, g_seconds);
+
+  const e = camera.eye.elements;
+  gl.uniform3f(u_CamPos, e[0], e[1], e[2]);
+
+  gl.uniform1f(u_IsWater, 0.0);
 
   drawSky();
-  drawGround();
-  drawWorld();
+  drawWater();
+  drawMap(map);
+  //drawGround();
+  //drawWorld();
 
   let body = new Matrix4();
   body.translate(0, 0, 0.2);
@@ -435,8 +459,27 @@ function drawCube(matrix, color){
 function drawGround() {
   const g = new Matrix4();
   g.translate(0, -0.55, 0);
-  g.scale(32, 0.1, 32);
+  g.scale(120, 0.1, 120);
   drawCube(g, [0.2, 0.6, 0.2, 1]);
+}
+
+function drawWater() {
+  if(!g_textureReady) return;
+
+  gl.uniform1f(u_IsWater, 1.0);
+  gl.uniform1f(u_texColorWeight, 1.0);
+
+  const size = 64;
+
+  const m = new Matrix4();
+  const e = camera.eye.elements;
+
+  m.translate(e[0], -0.2, e[2]);
+  m.scale(size, 0.05, size);
+  drawCube(m, [1,1,1,1]);
+
+  gl.uniform1f(u_IsWater, 0.0);
+  gl.uniform1f(u_texColorWeight, 0.0);
 }
 
 function drawSky() {
@@ -445,12 +488,71 @@ function drawSky() {
   gl.uniform1f(u_texColorWeight, 1.0);
 
   const s = new Matrix4();
-  s.translate(cam.pos[0], cam.pos[1], cam.pos[2]);
-  s.scale(120, 120, 120);
+  const e = camera.eye.elements;
+  s.translate(e[0], e[1], e[2]);
+  s.scale(64, 64, 64);
 
   drawCube(s, [0.05, 0.08, 0.2, 1]);
 
   gl.uniform1f(u_texColorWeight, 0.0);
+}
+
+function drawDetails() {
+  const H = 64;
+  const W = 64;
+  const m = Array.from({length:H}, () => Array(W).fill(0));
+
+  const cx = (W - 1) / 2;
+  const cz = (H - 1) / 2;
+
+  const waterR = Math.min(W, H) * 0.3;
+  const shoreBand = Math.min(W, H) * 1.2;
+
+  for (let z = 0; z < H; z++) {
+    for (let x = 0; x < W; x++) {
+      const dx = x - cx;
+      const dz = z - cz;
+      const ang = Math.atan2(dz, dx);
+      
+      const wiggle = 1.5 * Math.sin(ang * 4.0) + 1.0 * Math.sin(ang * 7.0);
+
+      const d = Math.sqrt(dx * dx + dz * dz);
+
+      const shore = waterR + wiggle;
+
+      if (d < shore) {
+        m[z][x] = 0;
+      } else if (d < shore + shoreBand){
+        m[z][x] = 1;
+      } else {
+        const t = (d - (shore + shoreBand));
+        m[z][x] = Math.min(6, 2 + Math.floor(t / 2));
+      }
+    }
+  }
+
+  return m;
+}
+
+function drawMap(map) {
+  const H = map.length;
+  const W = map[0].length;
+
+  for (let z = 0; z < H; z++) {
+    for (let x = 0; x < W; x++) {
+      const h = map[z][x];
+      if (h <= 0) continue;
+
+      for (let y = 0; y < h; y++) {
+        const m = new Matrix4();
+        m.translate(x - W/2, y, z - H/2);
+
+        const c = (y === h-1) ? [0.08, 0.08, 0.12, 1] : [0.05, 0.05, 0.08, 1];
+        gl.uniform1f(u_texColorWeight, 0.0);
+        drawCube(m, c);
+      }
+    }
+  }
 }
 
 function updateHUD() { 
