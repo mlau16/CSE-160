@@ -40,6 +40,7 @@ class Camera {
 
     moveForward(speed = 0.2) {
         const f = this.forward();
+        f.elements[1] = 0;
         f.mul(speed);
         this.eye.add(f);
         this.at.add(f);
@@ -48,6 +49,7 @@ class Camera {
 
     moveBackwards(speed = 0.2) {
         const f = this.forward();
+        f.elements[1] = 0;
         f.mul(speed);
         this.eye.sub(f);
         this.at.sub(f);
@@ -56,6 +58,7 @@ class Camera {
 
     moveLeft(speed = 0.2) {
         const f = this.forward();
+        f.elements[1] = 0;
         let s = Vector3.cross(this.up, f);
         s.normalize();
         s.mul(speed);
@@ -66,7 +69,7 @@ class Camera {
 
     moveRight(speed = 0.2) {
         const f = this.forward();
-
+        f.elements[1] = 0;
         let s = Vector3.cross(f, this.up);
         s.normalize();
         s.mul(speed);
@@ -93,26 +96,26 @@ class Camera {
         this.panLeft(-alpha);
     }
 
-    // panUp(alpha = 3) {
-    //     let f = new Vector3();
-    //     f.set(this.at);
-    //     f.sub(this.eye);
-    //     f.normalize();
+    panUp(alpha = 3) {
+        let f = new Vector3();
+        f.set(this.at);
+        f.sub(this.eye);
+        f.normalize();
 
-    //     let right = Vector3.cross(f, this.up);
-    //     right.normalize();
+        let right = Vector3.cross(f, this.up);
+        right.normalize();
 
-    //     let rot = new Matrix4();
-    //     rot.setRotate(alpha, right.elements[0], right.elements[1], right.elements[2]);
+        let rot = new Matrix4();
+        rot.setRotate(alpha, right.elements[0], right.elements[1], right.elements[2]);
 
-    //     let fPrime = rot.multiplyVector3(f);
+        let fPrime = rot.multiplyVector3(f);
 
-    //     this.at.set(this.eye);
-    //     this.at.add(fPrime);
-    //     this.updateView();
-    // }
+        this.at.set(this.eye);
+        this.at.add(fPrime);
+        this.updateView();
+    }
 
-    // panDown(alpha = 3) {
-    //     this.panUp(-alpha);
-    // }
+    panDown(alpha = 3) {
+        this.panUp(-alpha);
+    }
 }

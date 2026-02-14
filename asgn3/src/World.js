@@ -135,8 +135,11 @@ let map = drawDetails();
 
 let u_Time, u_CamPos, u_IsWater;
 
-
 let camera;
+const WATER_Y = -0.2;
+const EYE_HEIGHT = 1.0;
+
+let lanters = [];
 
 function setupWebGL(){
    // Retrieve <canvas> element
@@ -335,6 +338,7 @@ function tick() {
 
   const start = performance.now();
   updateCamera(dt);
+  lockCameraToWater();
   renderAllShapes();
   const end = performance.now();
 
@@ -738,4 +742,8 @@ function getCameraForwardFlat() {
   return [fx, 0, fz];
 }
 
-
+function lockCameraToWater() {
+  camera.eye.elements[1] = WATER_Y + EYE_HEIGHT;
+  camera.at.elements[1] = camera.eye.elements[1];
+  camera.updateView();
+}
