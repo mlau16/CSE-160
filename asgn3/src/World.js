@@ -187,6 +187,8 @@ function connectVariablesToGLSL(){
   gl.uniformMatrix4fv(u_ViewMatrix, false, view.elements);
   gl.uniformMatrix4fv(u_ProjectionMatrix, false, proj.elements);
 
+  gl.uniform1f(u_texColorWeight, 0.0);
+
 }
 
 function addActionsForHtmlUI() {
@@ -325,7 +327,7 @@ function initTextures() {
     g_textureReady = true;
   };
 
-  image.src = "img/sky.jpg";
+  image.src = "img/lanternSky.jpg";
 
   return true;
 }
@@ -438,10 +440,17 @@ function drawGround() {
 }
 
 function drawSky() {
+  if (!g_textureReady) return;
+
+  gl.uniform1f(u_texColorWeight, 1.0);
+
   const s = new Matrix4();
   s.translate(cam.pos[0], cam.pos[1], cam.pos[2]);
   s.scale(120, 120, 120);
+
   drawCube(s, [0.05, 0.08, 0.2, 1]);
+
+  gl.uniform1f(u_texColorWeight, 0.0);
 }
 
 function updateHUD() { 
