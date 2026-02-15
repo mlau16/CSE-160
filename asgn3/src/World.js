@@ -32,6 +32,7 @@ var FSHADER_SOURCE =`
   uniform float u_IsWater;
   uniform vec3 u_LightDir;
   uniform float u_LightIntensity;
+  uniform float u_Emissive;
 
   varying vec3 v_WorldPos;
   varying vec2 v_UV;
@@ -67,9 +68,11 @@ var FSHADER_SOURCE =`
       vec4 skyTint = vec4(0.15, 0.20, 0.35, 1.0);
       vec4 watery = mix(ripBase, skyTint, fresnel * 0.75);
 
-      gl_FragColor = vec4(watery.rgb * lit, watery.a);
+      vec3 outRgb = watery.rgb * lit + watery.rgb * u_Emissive;
+      gl_FragColor = vec4(clamp(outRgb, 0.0, 1.0), watery.a);
     } else {
-      gl_FragColor = vec4(base.rgb * lit, base.a);
+      vec3 outRgb = base.rgb * lit + base.rgb * u_Emissive;
+      gl_FragColor = vec4(clamp(outRgb, 0.0, 1.0), base.a);
     }
   }`;
 
@@ -139,7 +142,10 @@ let camera;
 const WATER_Y = -0.2;
 const EYE_HEIGHT = 1.0;
 
-let lanters = [];
+let lanterns = [];
+
+let u_LightDir, u_LightIntensity;
+let u_Emissive;
 
 function setupWebGL(){
    // Retrieve <canvas> element
@@ -187,7 +193,6 @@ function connectVariablesToGLSL(){
     return;
   }
 
-
   // Get the storage location of u_FragColor
   u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor');
   if (!u_FragColor) {
@@ -204,12 +209,17 @@ function connectVariablesToGLSL(){
 
    u_texColorWeight = gl.getUniformLocation(gl.program, 'u_texColorWeight');
 
-   u_Time = gl.getUniformLocation(gl.program, "u_Time");
-   u_CamPos = gl.getUniformLocation(gl.program, "u_CamPos");
-   u_IsWater = gl.getUniformLocation(gl.program, "u_IsWater");
+  u_Time = gl.getUniformLocation(gl.program, "u_Time");
+  u_CamPos = gl.getUniformLocation(gl.program, "u_CamPos");
+  u_IsWater = gl.getUniformLocation(gl.program, "u_IsWater");
 
-   u_LightDir = gl.getUniformLocation(gl.program, "u_LightDir");
-   u_LightIntensity = gl.getUniformLocation(gl.program, "u_LightIntensity");
+  u_LightDir = gl.getUniformLocation(gl.program, "u_LightDir");
+  u_LightIntensity = gl.getUniformLocation(gl.program, "u_LightIntensity");
+  u_Emissive = gl.getUniformLocation(gl.program, "u_Emissive");
+  if(!u_Emissive) {
+    console.log('Failed to get the storage location of u_Emissive');
+    return;
+  }
 
   // Get the storage location of u_ViewMatrix
   u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix');
@@ -258,6 +268,7 @@ function connectVariablesToGLSL(){
 
   gl.uniform3f(u_LightDir, -0.3, 1.0, 0.4);
   gl.uniform1f(u_LightIntensity, 0.9);
+  gl.uniform1f(u_Emissive, 0.0);
 }
 
 function addActionsForHtmlUI() {
@@ -317,8 +328,8 @@ function main() {
   g_sphere = new Sphere();
 
   camera = new Camera(canvas);
-
   initWorld();
+  initLanterns(500);
 
   //renderAllShapes();
   requestAnimationFrame(tick);
@@ -428,6 +439,31 @@ function initWorld() {
   }
 }
 
+function initLanterns(count = 120) {
+  lanterns = [];
+  const radius = 45;
+  const minY = 4;
+  const maxY = 60;
+
+  for (let i = 0; i < count; i++){
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(Math.random()) * radius;
+    const x = Math.cos(a) * r;
+    const z = Math.sin(a) * r;
+
+    const y = minY + Math.random() * (maxY - minY);
+
+    lanterns.push({
+      x, y, z,
+      phase: Math.random() * Math.PI * 2,
+      bob: 0.15 + Math.random() * 0.25,
+      speed: 0.6 + Math.random() * 0.9,
+      scale: 0.35 + Math.random() * 0.25,
+      hue: Math.random()
+    });
+  }
+}
+
 function drawWorld() {
   for (let z = 0; z < WORLD_D; z++) {
     for(let x = 0; x < WORLD_W; x++) {
@@ -455,6 +491,54 @@ function drawWorld() {
   }
 }
 
+function drawLanterns() {
+  for(let i = 0; i < lanterns.length; i++) {
+    const L = lanterns[i];
+    const bobY = Math.sin(g_seconds * L.speed + L.phase) * L.bob;
+
+    gl.uniform1f(u_texColorWeight, 0.0);
+    gl.uniform1f(u_Emissive, 0.35);
+
+    let m = new Matrix4();
+    m.translate(L.x, L.y + bobY, L.z);
+    m.scale(L.scale * 0.6, L.scale, L.scale * 0.6);
+    const c = [1.0, 0.55, 0.15, 1.0];
+    drawCube(m,c);
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    gl.depthMask(false);
+
+    gl.uniform1f(u_texColorWeight, 0.0);
+    gl.uniform1f(u_Emissive, 1.0);
+
+    const shells = [
+      { s: 1.25, a: 0.20 },
+      { s: 1.55, a: 0.12 },
+      { s: 1.90, a: 0.07 },
+      { s: 2.30, a: 0.04 },
+    ];
+
+    for (const sh of shells) {
+      let g = new Matrix4();
+      g.translate(L.x, L.y + bobY, L.z);
+      g.scale(L.scale * sh.s, L.scale * sh.s * 1.6, L.scale * sh.s);
+      drawCube(g, [1.0, 0.65, 0.25, sh.a]); 
+    }
+
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+
+    gl.uniform1f(u_Emissive, 1);
+    let top = new Matrix4();
+    top.translate(L.x, L.y + bobY + L.scale * 0.55, L.z);
+    top.scale(L.scale * 0.35, L.scale * 0.15, L.scale * 0.35);
+    drawCube(top, [1.0, 0.95, 0.6, 1.0]);
+
+    gl.uniform1f(u_Emissive, 0.0);
+  }
+}
+
 function renderAllShapes(){
   // Clear <canvas>
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -467,11 +551,17 @@ function renderAllShapes(){
   gl.uniform1f(u_Time, g_seconds);
 
   const e = camera.eye.elements;
+  
   gl.uniform3f(u_CamPos, e[0], e[1], e[2]);
 
   gl.uniform1f(u_IsWater, 0.0);
 
   drawSky();
+
+  gl.disable(gl.CULL_FACE);
+  drawLanterns();
+  gl.enable(gl.CULL_FACE);
+
   gl.disable(gl.CULL_FACE);
   drawWater();
   gl.enable(gl.CULL_FACE);
@@ -480,12 +570,6 @@ function renderAllShapes(){
   //drawWorld();
 
   drawBoat();
-
-  let body = new Matrix4();
-  body.translate(0, 0, 0.2);
-  body.rotate(g_rotateAngle, 0, 0, 1);
-  body.scale(0.5, 0.45, 0.8);
-  drawCube(body, [1,1,1,1]);
 }
 
 function drawCube(matrix, color){
@@ -524,6 +608,8 @@ function drawSky() {
   if (!g_textureReady) return;
 
   gl.disable(gl.CULL_FACE);
+
+  gl.depthMask(false);
   gl.uniform1f(u_IsWater, 0.0)
   gl.uniform1f(u_texColorWeight, 1.0);
 
@@ -535,6 +621,8 @@ function drawSky() {
   drawCube(s, [0.05, 0.08, 0.2, 1]);
 
   gl.uniform1f(u_texColorWeight, 0.0);
+
+  gl.depthMask(true);
   gl.enable(gl.CULL_FACE);
 }
 
@@ -710,22 +798,6 @@ function drawBoat() {
     seg2.scale(segL, segH, segW);
     drawCube(seg2, [0.35, 0.20, 0.10, 1.0]);
   }
-
-  // --- Mast ---
-  let mast = new Matrix4();
-  mast.translate(bx, by + 0.65, bz);
-  mast.rotate(yawDeg, 0, 1, 0);
-  mast.translate(0.25, 0, 0);
-  mast.scale(0.08, 1.2, 0.08);
-  drawCube(mast, [0.55, 0.45, 0.25, 1.0]);
-
-  // --- Little lantern block (cute Tangled vibe) ---
-  let lantern = new Matrix4();
-  lantern.translate(bx, by + 1.10, bz);
-  lantern.rotate(yawDeg, 0, 1, 0);
-  lantern.translate(0.25, 0.0, 0);
-  lantern.scale(0.18, 0.18, 0.18);
-  drawCube(lantern, [1.0, 0.85, 0.25, 1.0]);
 }
 
 function getCameraForwardFlat() {
@@ -743,7 +815,12 @@ function getCameraForwardFlat() {
 }
 
 function lockCameraToWater() {
-  camera.eye.elements[1] = WATER_Y + EYE_HEIGHT;
-  camera.at.elements[1] = camera.eye.elements[1];
+  const targetY = WATER_Y + EYE_HEIGHT;
+
+  const oldY = camera.eye.elements[1];
+  const dy = targetY - oldY;
+  camera.eye.elements[1] = targetY;
+  camera.at.elements[1] += dy;
+
   camera.updateView();
 }
