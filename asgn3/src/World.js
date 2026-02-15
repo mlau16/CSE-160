@@ -128,6 +128,12 @@ let u_Sampler;
 let g_texture0 = null;
 let g_textureReady = false;
 
+let g_woodTexture = null;
+let g_woodReady = false;
+
+const TEX_SKY = 0;
+const TEX_WOOD = 1;
+
 const keys = Object.create(null);
 
 const WORLD_W = 32;
@@ -146,6 +152,16 @@ let lanterns = [];
 
 let u_LightDir, u_LightIntensity;
 let u_Emissive;
+
+let g_playerHeldLantern = false;
+let g_playerLanternLit = false;
+
+let g_flyingLanterns = [];
+let prevF = false;
+let prevL = false;
+let groundLanterns = [];
+
+let g_clickPick = false;
 
 function setupWebGL(){
    // Retrieve <canvas> element
@@ -272,14 +288,40 @@ function connectVariablesToGLSL(){
 }
 
 function addActionsForHtmlUI() {
+  const el = document.getElementById("controls");
+  if(!el) return;
 
+  el.innerHTML = `
+    <b>Controls</b><br>
+    Click canvas: Lock mouse<br>
+    W/A/S/D: Move<br>
+    Q / E: Rotate Camera<br>
+    Left Click (While locked): Pick up lantern<br>
+    F: Release Lantern<br>
+    L: Toggle lantern light<br>
+    Esc: Unlock mouse
+  `;
 }
 
 function initInput() {
   document.addEventListener("keydown", (e) => keys[e.key.toLowerCase()] = true);
   document.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
 
-  canvas.addEventListener("click", () => canvas.requestPointerLock());
+  //canvas.addEventListener("click", () => canvas.requestPointerLock());
+
+  canvas.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+
+      if(document.pointerLockElement !== canvas) {
+        canvas.requestPointerLock();
+      } else {
+        g_clickPick = true;
+      }
+    
+  });
+
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
   document.addEventListener("mousemove", (e) => {
     if (document.pointerLockElement !== canvas) return;
@@ -329,6 +371,8 @@ function main() {
 
   camera = new Camera(canvas);
   initWorld();
+  initGroundLanterns();
+  spawnGroundLanterns(20);
   initLanterns(500);
 
   //renderAllShapes();
@@ -350,6 +394,8 @@ function tick() {
   const start = performance.now();
   updateCamera(dt);
   lockCameraToWater();
+  handleLanternControls();
+  updateFlyingLanterns(dt);
   renderAllShapes();
   const end = performance.now();
 
@@ -391,19 +437,27 @@ function initTextures() {
 
   const image = new Image();
   image.onload = function() {
-    loadTexture(g_texture0, u_Sampler, image);
+    loadTexture(g_texture0, u_Sampler, image, TEX_SKY);
     g_textureReady = true;
   };
 
   image.src = "img/lanternSky.jpg";
 
+  g_woodTexture = gl.createTexture();
+  const woodImg = new Image();
+  woodImg.onload = () => {
+    loadTexture(g_woodTexture, u_Sampler, woodImg, TEX_WOOD);
+    g_woodReady = true;
+  };
+  woodImg.src = "img/wood.jpg";
+
   return true;
 }
 
-function loadTexture(texture, sample, image) {
+function loadTexture(texture, sample, image, unit) {
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
 
-  gl.activeTexture(gl.TEXTURE0);
+  gl.activeTexture(gl.TEXTURE0 + unit);
   gl.bindTexture(gl.TEXTURE_2D, texture);
 
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -413,7 +467,7 @@ function loadTexture(texture, sample, image) {
 
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
 
-  gl.uniform1i(sample, 0);
+  gl.uniform1i(sample, unit);
 }
 
 function initWorld() {
@@ -464,6 +518,13 @@ function initLanterns(count = 120) {
   }
 }
 
+function initGroundLanterns() {
+  groundLanterns = [];
+ 
+  groundLanterns.push({ ix: Math.floor(map[0].length/2)+2, iz: Math.floor(map.length/2), lit: false });
+  groundLanterns.push({ ix: Math.floor(map[0].length/2)-2, iz: Math.floor(map.length/2)+1, lit: false });
+}
+
 function drawWorld() {
   for (let z = 0; z < WORLD_D; z++) {
     for(let x = 0; x < WORLD_W; x++) {
@@ -491,51 +552,39 @@ function drawWorld() {
   }
 }
 
-function drawLanterns() {
-  for(let i = 0; i < lanterns.length; i++) {
-    const L = lanterns[i];
+function drawLanterns(x, y, z, scale, lit, yawDeg = null, glow = true) {
+  gl.uniform1f(u_texColorWeight, 0.0);
+  gl.uniform1f(u_Emissive, lit ? 0.9 : 0.0);
+
+  const bodyColor = lit ? [1.0, 0.8, 0.25, 1.0] : [0.35, 0.30, 0.25, 1.0];
+
+  // BODY
+  let m = new Matrix4();
+  m.translate(x, y, z);
+  if (yawDeg !== null) m.rotate(yawDeg, 0, 1, 0);
+  m.scale(scale * 0.6, scale, scale * 0.6);
+  drawCube(m, bodyColor);
+
+  // GLOW (additive shells)
+  if (lit && glow) {
+    drawGlowAt(x, y, z, scale);
+  }
+
+  // CAP 
+  gl.uniform1f(u_Emissive, lit ? 0.2 : 0.0);
+  let top = new Matrix4();
+  top.translate(x, y + scale * 0.55, z);
+  if (yawDeg !== null) top.rotate(yawDeg, 0, 1, 0);
+  top.scale(scale * 0.35, scale * 0.15, scale * 0.35);
+  drawCube(top, [1.0, 0.95, 0.6, 1.0]);
+
+  gl.uniform1f(u_Emissive, 0.0);
+}
+
+function drawSkyLanterns() {
+  for(const L of lanterns) {
     const bobY = Math.sin(g_seconds * L.speed + L.phase) * L.bob;
-
-    gl.uniform1f(u_texColorWeight, 0.0);
-    gl.uniform1f(u_Emissive, 0.35);
-
-    let m = new Matrix4();
-    m.translate(L.x, L.y + bobY, L.z);
-    m.scale(L.scale * 0.6, L.scale, L.scale * 0.6);
-    const c = [1.0, 0.55, 0.15, 1.0];
-    drawCube(m,c);
-
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
-    gl.depthMask(false);
-
-    gl.uniform1f(u_texColorWeight, 0.0);
-    gl.uniform1f(u_Emissive, 1.0);
-
-    const shells = [
-      { s: 1.25, a: 0.20 },
-      { s: 1.55, a: 0.12 },
-      { s: 1.90, a: 0.07 },
-      { s: 2.30, a: 0.04 },
-    ];
-
-    for (const sh of shells) {
-      let g = new Matrix4();
-      g.translate(L.x, L.y + bobY, L.z);
-      g.scale(L.scale * sh.s, L.scale * sh.s * 1.6, L.scale * sh.s);
-      drawCube(g, [1.0, 0.65, 0.25, sh.a]); 
-    }
-
-    gl.depthMask(true);
-    gl.disable(gl.BLEND);
-
-    gl.uniform1f(u_Emissive, 1);
-    let top = new Matrix4();
-    top.translate(L.x, L.y + bobY + L.scale * 0.55, L.z);
-    top.scale(L.scale * 0.35, L.scale * 0.15, L.scale * 0.35);
-    drawCube(top, [1.0, 0.95, 0.6, 1.0]);
-
-    gl.uniform1f(u_Emissive, 0.0);
+    drawLanterns(L.x, L.y + bobY, L.z, L.scale, true);
   }
 }
 
@@ -559,7 +608,7 @@ function renderAllShapes(){
   drawSky();
 
   gl.disable(gl.CULL_FACE);
-  drawLanterns();
+  drawSkyLanterns();
   gl.enable(gl.CULL_FACE);
 
   gl.disable(gl.CULL_FACE);
@@ -568,6 +617,10 @@ function renderAllShapes(){
   drawMap(map);
   //drawGround();
   //drawWorld();
+
+  drawGroundLanterns();
+  drawFlyingLanterns();
+  equipLantern();
 
   drawBoat();
 }
@@ -588,6 +641,10 @@ function drawGround() {
 function drawWater() {
   if(!g_textureReady) return;
 
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, g_texture0);
+  gl.uniform1i(u_Sampler, 0);
+
   gl.uniform1f(u_IsWater, 1.0);
   gl.uniform1f(u_texColorWeight, 1.0);
 
@@ -607,6 +664,10 @@ function drawWater() {
 function drawSky() {
   if (!g_textureReady) return;
 
+  gl.activeTexture(gl.TEXTURE0 + TEX_SKY);
+  gl.bindTexture(gl.TEXTURE_2D, g_texture0);
+  gl.uniform1i(u_Sampler, TEX_SKY);
+
   gl.disable(gl.CULL_FACE);
 
   gl.depthMask(false);
@@ -618,7 +679,7 @@ function drawSky() {
   s.translate(e[0], e[1], e[2]);
   s.scale(120, 120, 120);
 
-  drawCube(s, [0.05, 0.08, 0.2, 1]);
+  drawCube(s, [1, 1, 1, 1]);
 
   gl.uniform1f(u_texColorWeight, 0.0);
 
@@ -716,6 +777,13 @@ function drawMap(map) {
 }
 
 function drawBoat() {
+  if(!g_woodReady) return;
+
+  gl.activeTexture(gl.TEXTURE0 + TEX_WOOD);
+  gl.bindTexture(gl.TEXTURE_2D, g_woodTexture);
+  gl.uniform1i(u_Sampler, TEX_WOOD);
+  gl.uniform1f(u_texColorWeight, 1.0);
+
   const e = camera.eye.elements;
   const a = camera.at.elements;
 
@@ -733,14 +801,13 @@ function drawBoat() {
   const yawDeg = 90 + (Math.atan2(fx, fz) * 180 / Math.PI);
 
   gl.uniform1f(u_IsWater, 0.0);
-  gl.uniform1f(u_texColorWeight, 0.0);
 
   // --- Hull base (flat rectangle) ---
   let base = new Matrix4();
   base.translate(bx, by, bz);
   base.rotate(yawDeg, 0, 1, 0);
   base.scale(1.4, 0.1, 0.8);
-  drawCube(base, [0.35, 0.20, 0.10, 1.0]);
+  drawCube(base, [1, 1, 1, 1.0]);
 
   // side1 
   let side1 = new Matrix4();
@@ -748,7 +815,7 @@ function drawBoat() {
   side1.rotate(yawDeg, 0, 1, 0);
   side1.translate(0, -0.05, -0.45);   
   side1.scale(1.4, 0.18, 0.1);
-  drawCube(side1, [0.32, 0.18, 0.09, 1.0]);
+  drawCube(side1, [1, 1, 1, 1.0]);
 
   // side 2
   let side2 = new Matrix4();
@@ -756,7 +823,7 @@ function drawBoat() {
   side2.rotate(yawDeg, 0, 1, 0);
   side2.translate(0, -0.05, 0.45);    
   side2.scale(1.4, 0.18, 0.1);
-  drawCube(side2, [0.32, 0.18, 0.09, 1.0]);
+  drawCube(side2, [1, 1, 1, 1.0]);
 
   // --- Cabin/seat ---
   let seat = new Matrix4();
@@ -764,7 +831,7 @@ function drawBoat() {
   seat.rotate(yawDeg, 0, 1, 0);
   seat.translate(-0.15, -0.15, 0);
   seat.scale(0.1, 0.1, 0.8);
-  drawCube(seat, [0.45, 0.28, 0.14, 1.0]);
+  drawCube(seat, [1, 1, 1, 1.0]);
 
   // boat tip (back)
   const tipSteps = 6;
@@ -780,7 +847,7 @@ function drawBoat() {
     let seg = new Matrix4(base);
     seg.translate(zOff - 2.5, yOff, 0);
     seg.scale(segL, segH, segW);
-    drawCube(seg, [0.35, 0.20, 0.10, 1.0]);
+    drawCube(seg, [1, 1, 1, 1.0]);
   }
 
   // boat tip (front)
@@ -796,8 +863,10 @@ function drawBoat() {
     let seg2 = new Matrix4(base);
     seg2.translate(zOff - 3.5, yOff, 0);
     seg2.scale(segL, segH, segW);
-    drawCube(seg2, [0.35, 0.20, 0.10, 1.0]);
+    drawCube(seg2, [1, 1, 1, 1.0]);
   }
+
+  gl.uniform1f(u_texColorWeight, 0.0);
 }
 
 function getCameraForwardFlat() {
@@ -823,4 +892,201 @@ function lockCameraToWater() {
   camera.at.elements[1] += dy;
 
   camera.updateView();
+}
+
+function getFrontCell(step = 1.6) {
+  const e = camera.eye.elements;
+  const [fx, _, fz] = getCameraForwardFlat();
+
+  const px = e[0] + fx * step;
+  const pz = e[2] + fz * step;
+
+  const H = map.length;
+  const W = map[0].length;
+
+  const ix = Math.floor(px + W / 2);
+  const iz = Math.floor(pz + H / 2);
+
+  if(ix < 0 || ix >= W || iz < 0 || iz >= H) return null;
+  return { ix, iz };
+}
+
+function topYAtCell(ix, iz) {
+  const h = map[iz][ix] || 0;
+  return -0.5 + h;
+}
+
+function cellCenterWorld(ix, iz) {
+  const H = map.length;
+  const W = map[0].length;
+  return {
+    x: (ix + 0.5) - W / 2,
+    z: (iz + 0.5) - H / 2
+  }
+}
+
+function pickupLantern() {
+  if (g_playerHeldLantern) return;
+
+  const cell = getFrontCell(1.6);
+  if (!cell) return;
+
+  const idx = groundLanterns.findIndex(L => L.ix === cell.ix && L.iz === cell.iz);
+  if (idx === -1) return;
+
+  g_playerHeldLantern = true;
+  g_playerLanternLit = groundLanterns[idx].lit;
+  groundLanterns.splice(idx, 1);
+}
+
+function toggleLanternLight() {
+  if(!g_playerHeldLantern) return;
+  g_playerLanternLit = !g_playerLanternLit;
+}
+
+function releaseLantern() {
+  if (!g_playerHeldLantern) return;
+
+  const cell = getFrontCell(1.6);
+  if(!cell) return;
+
+  const { x, z } = cellCenterWorld(cell.ix, cell.iz);
+  const y = topYAtCell(cell.ix, cell.iz) + 0.6;
+
+  const [fx, _, fz] = getCameraForwardFlat();
+
+  g_flyingLanterns.push({
+    x,y,z,
+    vx: fx * 0.25,
+    vy: 1.2,
+    vz: fz * 0.25,
+    lit: g_playerLanternLit,
+    scale: 0.28,
+    phase: Math.random() * Math.PI * 2,
+    bob: 0.10,
+    speed: 0.9,
+  });
+
+  g_playerHeldLantern = false;
+  g_playerLanternLit = false;
+}
+
+function handleLanternControls() {
+  const fDown = !!keys["f"];
+  const lDown = !!keys["l"];
+
+  if (g_clickPick) {
+    if (!g_playerHeldLantern) pickupLantern();
+    g_clickPick = false;
+  }
+
+  if(fDown && !prevF) {
+    if(g_playerHeldLantern) releaseLantern();
+  }
+
+  if(lDown && !prevL) {
+    toggleLanternLight();
+  }
+
+  prevF = fDown;
+  prevL = lDown;
+}
+
+function updateFlyingLanterns(dt) {
+  for (const L of g_flyingLanterns) {
+    L.vy += (L.lit ? 0.35 : 0.05) * dt;
+
+    const damp = Math.pow(0.98, dt * 60);
+    L.vx *= damp; L.vy *=damp; L.vz *= damp;
+
+    L.x += L.vx * dt;
+    L.y += L.vy * dt;
+    L.z += L.vz * dt;
+
+    const minY = WATER_Y + 0.4;
+    if (L.y < minY) { L.y = minY; L.vy = Math.max(L.vy, 0.2); }
+
+    if (L.y > 40) L.y = 40;
+  }
+}
+
+function drawGroundLanterns() {
+  for (const L of groundLanterns) {
+    const { x,z } = cellCenterWorld(L.ix, L.iz);
+    const isWater = (map[L.iz][L.ix] === 0);
+    const y = (isWater ? WATER_Y : topYAtCell(L.ix, L.iz)) + 0.25;
+
+    drawLanterns(x, y, z, 0.35, L.lit);
+  }
+}
+
+function spawnGroundLanterns(count = 20) {
+  groundLanterns = [];
+
+  const H = map.length;
+  const W = map[0].length;
+
+  let tries = 0;
+  while (groundLanterns.length < count && tries < count * 200) {
+    tries++;
+
+    const ix = Math.floor(Math.random() * W);
+    const iz = Math.floor(Math.random() * H);
+
+    if(map[iz][ix] !== 0) continue;
+    if (groundLanterns.some(L => L.ix === ix && L.iz === iz)) continue;
+
+    groundLanterns.push({ ix, iz, lit: false});
+  }
+}
+
+function drawFlyingLanterns() {
+  for (const L of g_flyingLanterns) {
+    const visualBob = 0.08 * Math.sin(g_seconds * L.speed + L.phase);
+
+    drawLanterns(L.x, L.y + visualBob, L.z, L.scale, L.lit);
+  }
+}
+
+function equipLantern() {
+  if(!g_playerHeldLantern) return;
+
+  const e = camera.eye.elements;
+  const [fx, _, fz] = getCameraForwardFlat();
+
+  const x = e[0] + fx * 1.0 + 0.25;
+  const y = e[1] -0.25;
+  const z = e[2] + fz * 1.0 + 0.1;
+
+  const yawDeg = 90 + (Math.atan2(fx, fz) * 180 / Math.PI);
+
+  drawLanterns(x, y, z, 0.30, g_playerLanternLit, yawDeg, true);
+}
+
+function drawGlowAt(x, y, z, s) {
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+  gl.depthMask(false);
+
+  gl.uniform1f(u_texColorWeight, 0.0);
+  gl.uniform1f(u_Emissive, 1.0);
+
+  const shells = [
+    { s: 1.25, a: 0.20 },
+    { s: 1.55, a: 0.12 },
+    { s: 1.90, a: 0.07 },
+    { s: 2.30, a: 0.04 },
+  ];
+
+  for (const sh of shells) {
+    let g = new Matrix4();
+    g.translate(x, y, z);
+    g.scale(s * sh.s, s * sh.s * 1.6, s * sh.s);
+    drawCube(g, [1.0, 0.65, 0.25, sh.a]); 
+  }
+
+  gl.depthMask(true);
+  gl.disable(gl.BLEND);
+
+  gl.uniform1f(u_Emissive, 0.0);
 }
