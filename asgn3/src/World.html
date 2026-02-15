@@ -10,6 +10,10 @@
     <title>World</title>
 
     <style>
+      body {
+        margin: 0;
+        background-color: black;
+      }
       #canvas-container {
         display: flex;
         justify-content: center;
@@ -18,13 +22,9 @@
   </head>
 
   <body onload="main()">
-    <button id ="startGameButton">X</button>
-    <button id="stopGameButton">X</button>
-
-    <br>
-    <div style="text-align: center">VIRTUAL WORLD</div>
+    <div style="text-align: center; color: gold">LANTERN FESTIVAL</div>
     <div id="canvas-container">
-      <canvas id="webgl" width="800" height="800">
+      <canvas id="webgl" width="1000" height="650">
       Please use a browser that supports "canvas"
       </canvas>
     </div>

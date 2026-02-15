@@ -30,6 +30,8 @@ var FSHADER_SOURCE =`
   uniform float u_Time;
   uniform vec3 u_CamPos;
   uniform float u_IsWater;
+  uniform float u_IsSky;
+  uniform vec3 u_SkyTint;
   uniform vec3 u_LightDir;
   uniform float u_LightIntensity;
   uniform float u_Emissive;
@@ -70,6 +72,10 @@ var FSHADER_SOURCE =`
 
       vec3 outRgb = watery.rgb * lit + watery.rgb * u_Emissive;
       gl_FragColor = vec4(clamp(outRgb, 0.0, 1.0), watery.a);
+    } else if (u_IsSky > 0.5) {
+      vec3 tinted = base.rgb * u_SkyTint;
+      gl_FragColor = vec4(tinted, base.a);
+      return;
     } else {
       vec3 outRgb = base.rgb * lit + base.rgb * u_Emissive;
       gl_FragColor = vec4(clamp(outRgb, 0.0, 1.0), base.a);
@@ -163,6 +169,9 @@ let groundLanterns = [];
 
 let g_clickPick = false;
 
+let g_lastGoodEye = null;
+let g_lastGoodAt = null;
+
 function setupWebGL(){
    // Retrieve <canvas> element
   canvas = document.getElementById('webgl');
@@ -229,6 +238,9 @@ function connectVariablesToGLSL(){
   u_CamPos = gl.getUniformLocation(gl.program, "u_CamPos");
   u_IsWater = gl.getUniformLocation(gl.program, "u_IsWater");
 
+  u_IsSky = gl.getUniformLocation(gl.program, "u_IsSky");
+  u_SkyTint = gl.getUniformLocation(gl.program, "u_SkyTint");
+
   u_LightDir = gl.getUniformLocation(gl.program, "u_LightDir");
   u_LightIntensity = gl.getUniformLocation(gl.program, "u_LightIntensity");
   u_Emissive = gl.getUniformLocation(gl.program, "u_Emissive");
@@ -285,6 +297,9 @@ function connectVariablesToGLSL(){
   gl.uniform3f(u_LightDir, -0.3, 1.0, 0.4);
   gl.uniform1f(u_LightIntensity, 0.9);
   gl.uniform1f(u_Emissive, 0.0);
+
+  gl.uniform1f(u_IsSky, 0.0);
+  gl.uniform3f(u_SkyTint, 0.55, 0.60, 0.65);
 }
 
 function addActionsForHtmlUI() {
@@ -299,7 +314,8 @@ function addActionsForHtmlUI() {
     Left Click (While locked): Pick up lantern<br>
     F: Release Lantern<br>
     L: Toggle lantern light<br>
-    Esc: Unlock mouse
+    Esc: Unlock mouse<br>
+    Collect all lanterns in the map!
   `;
 }
 
@@ -393,6 +409,7 @@ function tick() {
 
   const start = performance.now();
   updateCamera(dt);
+  setWorldBounds();
   lockCameraToWater();
   handleLanternControls();
   updateFlyingLanterns(dt);
@@ -673,6 +690,7 @@ function drawSky() {
   gl.depthMask(false);
   gl.uniform1f(u_IsWater, 0.0)
   gl.uniform1f(u_texColorWeight, 1.0);
+  gl.uniform1f(u_IsSky, 1.0);
 
   const s = new Matrix4();
   const e = camera.eye.elements;
@@ -682,6 +700,7 @@ function drawSky() {
   drawCube(s, [1, 1, 1, 1]);
 
   gl.uniform1f(u_texColorWeight, 0.0);
+  gl.uniform1f(u_IsSky, 0.0);
 
   gl.depthMask(true);
   gl.enable(gl.CULL_FACE);
@@ -1089,4 +1108,42 @@ function drawGlowAt(x, y, z, s) {
   gl.disable(gl.BLEND);
 
   gl.uniform1f(u_Emissive, 0.0);
+}
+
+function worldToCell(x, z) {
+  const H = map.length;
+  const W = map[0].length;
+  const ix = Math.floor(x + W / 2);
+  const iz = Math.floor(z + H / 2);
+  if (ix < 0 || ix >= W || iz < 0 || iz >= H) return null;
+  return {ix, iz};
+}
+
+function isInWater(x, z) {
+  const cell = worldToCell(x,z);
+  if (!cell) return false;
+  return map[cell.iz][cell.ix] === 0;
+}
+
+function setWorldBounds() {
+  const ex = camera.eye.elements[0];
+  const ez = camera.eye.elements[2];
+
+  if(isInWater(ex, ez)) {
+    g_lastGoodEye = [camera.eye.elements[0], camera.eye.elements[1], camera.eye.elements[2]];
+    g_lastGoodAt = [camera.at.elements[0], camera.at.elements[1], camera.at.elements[2]];
+    return;
+  }
+
+  if (g_lastGoodEye && g_lastGoodAt) {
+    camera.eye.elements[0] = g_lastGoodEye[0];
+    camera.eye.elements[1] = g_lastGoodEye[1];
+    camera.eye.elements[2] = g_lastGoodEye[2];
+
+    camera.at.elements[0] = g_lastGoodAt[0];
+    camera.at.elements[1] = g_lastGoodAt[1];
+    camera.at.elements[2] = g_lastGoodAt[2];
+
+    camera.updateView();
+  }
 }
