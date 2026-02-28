@@ -1,0 +1,108 @@
+<!--
+  Mandy Lau
+  mlau16@ucsc.edu
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Lighting</title>
+
+    <style>
+      body {
+        margin: 0;
+        background-color: black;
+      }
+      #canvas-container {
+        display: flex;
+        justify-content: center;
+      }
+    </style>
+  </head>
+
+  <body onload="main()">
+    <div style="text-align: center; color: gold">Assignment 4: Lighting</div>
+    <div id="canvas-container">
+      <canvas id="webgl" width="1000" height="650">
+      Please use a browser that supports "canvas"
+      </canvas>
+    </div>
+
+    <button id="btnNormals">Normals: OFF</button>
+
+    <div id="perf" style="text-align:center; font-family: monospace; margin-top: 8px;">
+      FPS: -- | ms/frame: --
+    </div>   
+    
+    <div id="controls" style="
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      max-width: 320px;
+      padding: 10px 12px;
+      background: rgba(0,0,0,0.55);
+      color:white;
+      font-family: monospace;
+      font-size: 12px;
+      line-height: 1.35;
+      border-radius: 10px;
+      z-index: 9999;
+      user-select: none;">
+    </div>
+
+    <!---
+    <div>
+    <button id="clearButton">X</button>
+    </div>
+
+    <br>
+    <div>
+      <button id="squareButton">X</button>
+      <button id="triangleButton">X</button>
+      <button id="circleButton">X</button>
+    </div>
+
+    <div>  
+      <label>X <input id="redSlide" type="range" min="0" max="100" value="100"></label>
+      <label>X <input id="greenSlide" type="range" min="0" max="100" value="100"></label>
+      <label>X <input id="blueSlide" type="range" min="0" max="100" value="100"></label>
+    </div>
+
+    <div>
+      <label>X <input id="sizeSlide" type="range" min="1" max="40" value="20"></label>
+      <label>X <input id="segSlide" type="range" min="3" max="60" value="20"></label>
+    </div>
+    --->
+
+    <!---
+    <br>
+    <div style="text-align: center">
+    <label>Camera Angle: <input id="angleSlide" type="range" min="0" max="360" value="45"></label>
+    <br>
+    <label>Rotate: <input id="rotateSlide" type="range" min="-45" max="45" value="0"></label>
+    <br>
+    <label>Neck: <input id="neckSlide" type="range" min="-45" max="45" value="0"></label>
+    <br>
+    <label>Head: <input id="headSlide" type="range" min="-20" max="20" value="0"></label>
+    <br>
+    Animation: 
+    <button type="button" id="animationOnButton">ON</button>
+    <button type="button" id="animationOffButton">OFF</button>
+    </div>
+    -->
+
+    <script src="../lib/webgl-utils.js"></script>
+    <script src="../lib/webgl-debug.js"></script>
+    <script src="../lib/cuon-utils.js"></script>
+    <script src="../lib/cuon-matrix-cse160.js"></script>
+    <script src="Cube.js"></script>
+    <script src="Torus.js"></script>
+    <script src="Sphere.js"></script>
+    <script src="Triangle.js"></script>
+    <script src="Circle.js"></script>
+    <script src="Camera.js"></script>
+    <script src="World.js"></script>
+  </body>
+
+</html>
