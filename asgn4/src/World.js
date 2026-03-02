@@ -1,6 +1,8 @@
 
 // Vertex shader program
 var VSHADER_SOURCE = `
+  precision mediump float;
+
   attribute vec4 a_Position;
   attribute vec2 a_UV;
   attribute vec3 a_Normal;
@@ -8,16 +10,25 @@ var VSHADER_SOURCE = `
   uniform mat4 u_ModelMatrix;
   uniform mat4 u_ViewMatrix;
   uniform mat4 u_ProjectionMatrix;
+  uniform mat4 u_NormalMatrix;
+  uniform vec3 u_LightPos;
 
   varying vec2 v_UV;
   varying vec3 v_WorldPos;
-  varying vec3 v_Normal;
+  varying vec3 v_NormalDir;
+  varying vec3 v_LightDir;
+
 
   void main() {
     gl_Position = u_ProjectionMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
+
     v_UV = a_UV;
-    v_WorldPos = (u_ModelMatrix * a_Position).xyz;
-    v_Normal = a_Normal;
+
+    vec3 worldPos = (u_ModelMatrix * a_Position).xyz;
+    v_WorldPos = worldPos;
+
+    v_NormalDir = normalize((u_NormalMatrix * vec4(a_Normal, 0.0)).xyz);
+    v_LightDir = u_LightPos - worldPos;
   }`;
 
 // Fragment shader program
@@ -29,23 +40,30 @@ var FSHADER_SOURCE =`
   uniform float u_texColorWeight;
   uniform float u_Time;
   uniform vec3 u_CamPos;
-  uniform float u_IsWater;
-  uniform float u_IsSky;
-  uniform vec3 u_SkyTint;
-  uniform vec3 u_LightDir;
   uniform float u_LightIntensity;
+  uniform vec3 u_LightPos;
   uniform float u_Emissive;
   uniform float u_ShowNormals;
+  uniform vec3 u_LightColor;
+  uniform float u_EnableLighting;
+
+  uniform float u_EnableSpot;     
+  uniform vec3  u_SpotPos;    
+  uniform vec3  u_SpotDir;        
+  uniform float u_SpotInner;  
+  uniform float u_SpotOuter;  
 
   varying vec3 v_WorldPos;
   varying vec2 v_UV;
-  varying vec3 v_Normal;
+  varying vec3 v_NormalDir;
+  varying vec3 v_LightDir;
+  
 
   void main() {
-    vec3 N = normalize(v_Normal);
+    vec3 N = normalize(v_NormalDir);
 
     if (u_ShowNormals > 0.5) {
-      gl_FragColor = vec4(normalize(v_Normal) * 0.5 + 0.5, 1.0);
+      gl_FragColor = vec4(N * 0.5 + 0.5, 1.0);
       return;
     }
 
@@ -53,36 +71,39 @@ var FSHADER_SOURCE =`
     float t = u_texColorWeight;
     vec4 base = (1.0 - t) * u_FragColor + t * texColor;
 
-    vec3 L = normalize(u_LightDir);
+    if (u_EnableLighting < 0.5) {
+      gl_FragColor = base;
+      return;
+    }
+
+    vec3 L = normalize(v_LightDir);
+    vec3 V = normalize(u_CamPos - v_WorldPos);
+
+    // Phong constants
+    float ka = 0.25;
+    float kd = 0.8;
+    float ks = 0.6;
+    float shininess = 32.0;
 
     float ndotl = max(dot(N, L), 0.0);
-    float ambient = 0.25;
-    float diff = 0.8 * ndotl;
 
-    float lit = ambient + u_LightIntensity * diff;
-    lit = clamp(lit, 0.0, 1.0);
+    vec3 R = reflect(-L, N);
+    float spec = pow(max(dot(R, V), 0.0), shininess);
 
-    if (u_IsWater > 0.5) {
-      vec2 uv = v_UV;
-
-      uv.x += 0.02 * sin(uv.y * 30.0 + u_Time * 1.5);
-      uv.y += 0.02 * sin(uv.x * 25.0 + u_Time * 1.2);
-
-      vec4 ripTex = texture2D(u_Sampler, uv);
-      vec4 ripBase = (1.0 - t) * u_FragColor + t * ripTex;
-
-      vec3 V = normalize(u_CamPos - v_WorldPos);
-      float fresnel = pow(1.0 - abs(V.y), 3.0);
-
-      vec4 skyTint = vec4(0.15, 0.20, 0.35, 1.0);
-      vec4 watery = mix(ripBase, skyTint, fresnel * 0.75);
-
-      vec3 outRgb = watery.rgb * lit + watery.rgb * u_Emissive;
-      gl_FragColor = vec4(clamp(outRgb, 0.0, 1.0), watery.a);
-    } else {
-      vec3 outRgb = base.rgb * lit + base.rgb * u_Emissive;
-      gl_FragColor = vec4(clamp(outRgb, 0.0, 1.0), base.a);
+    // Spotlight factor
+    float spot = 1.0;
+    if (u_EnableSpot > 0.5) {
+      vec3 S = normalize(v_WorldPos - u_SpotPos);       // spot -> fragment
+      float cosTheta = dot(normalize(u_SpotDir), S);    // compare directions
+      spot = smoothstep(u_SpotOuter, u_SpotInner, cosTheta);
     }
+
+    // Ambient (untinted) + tinted diffuse/spec (spot affects these)
+    vec3 ambient = base.rgb * ka;
+    vec3 diffuseSpec = base.rgb * (u_LightColor * (u_LightIntensity * spot)) * (kd * ndotl + ks * spec);
+
+    vec3 outRgb = ambient + diffuseSpec + base.rgb * u_Emissive;
+    gl_FragColor = vec4(clamp(outRgb, 0.0, 1.0), base.a);
   }`;
 
 var g_shapesList = [];
@@ -100,6 +121,7 @@ let g_selectedColor = [1.0, 1.0, 1.0, 1.0];
 var u_ModelMatrix;
 let u_ViewMatrix;
 let u_ProjectionMatrix;
+let u_NormalMatrix;
 
 var u_texColorWeight;
 
@@ -144,6 +166,18 @@ let u_ShowNormals;
 let g_showNormals = false;
 let g_normalBuffer = null;
 
+let u_LightColor;
+let u_EnableLighting;
+
+let g_lightColor = [1.0, 1.0, 1.0];
+let g_enableLighting = true;
+
+let u_EnableSpot, u_SpotPos, u_SpotDir, u_SpotInner, u_SpotOuter;
+let g_enableSpot = true;
+let g_spotPos = [2, 3, 2];      
+let g_spotInnerDeg = 15;
+let g_spotOuterDeg = 25;
+
 const TEX_SKY = 0;
 const TEX_WOOD = 1;
 
@@ -159,6 +193,12 @@ let camera;
 const WATER_Y = -0.2;
 const EYE_HEIGHT = 1.0;
 
+let g_lightPos = [2.0, 2.0, 2.0];
+
+let g_animateLight = true;
+let g_lightAngle = 0;      
+let g_lightRadius = 3.0;
+let g_lightCenter = [0, 1.5, 0];  
 
 function setupWebGL(){
    // Retrieve <canvas> element
@@ -231,7 +271,18 @@ function connectVariablesToGLSL(){
 
   u_LightDir = gl.getUniformLocation(gl.program, "u_LightDir");
   u_LightIntensity = gl.getUniformLocation(gl.program, "u_LightIntensity");
+  u_LightPos = gl.getUniformLocation(gl.program, "u_LightPos");
   u_Emissive = gl.getUniformLocation(gl.program, "u_Emissive");
+
+  u_LightColor = gl.getUniformLocation(gl.program, "u_LightColor");
+  u_EnableLighting = gl.getUniformLocation(gl.program, "u_EnableLighting");
+
+  u_EnableSpot = gl.getUniformLocation(gl.program, "u_EnableSpot");
+  u_SpotPos    = gl.getUniformLocation(gl.program, "u_SpotPos");
+  u_SpotDir    = gl.getUniformLocation(gl.program, "u_SpotDir");
+  u_SpotInner  = gl.getUniformLocation(gl.program, "u_SpotInner");
+  u_SpotOuter  = gl.getUniformLocation(gl.program, "u_SpotOuter");
+
   if(!u_Emissive) {
     console.log('Failed to get the storage location of u_Emissive');
     return;
@@ -249,7 +300,11 @@ function connectVariablesToGLSL(){
       return;
     }
 
-
+  u_NormalMatrix = gl.getUniformLocation(gl.program, "u_NormalMatrix");
+  if(!u_NormalMatrix) {
+    console.log("Failed to get u_NormalMatrix");
+    return;
+  }
 
   // Get the storage location of u_ViewMatrix
   u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix');
@@ -353,6 +408,35 @@ function main() {
   initTextures();
   initInput();
 
+  const btn = document.getElementById("btnLightAnim");
+  btn.onclick = () => {
+    g_animateLight = !g_animateLight;
+    btn.innerText = g_animateLight ? "Light Animation: ON" : "Light Animation: OFF";
+  };
+
+  document.getElementById("btnLighting").onclick = () => {
+    g_enableLighting = !g_enableLighting;
+    document.getElementById("btnLighting").innerText =
+      g_enableLighting ? "Lighting: ON" : "Lighting: OFF";
+  };
+
+  const lr = document.getElementById("lr");
+  const lg = document.getElementById("lg");
+  const lb = document.getElementById("lb");
+
+  function updateLightColor() {
+    g_lightColor[0] = parseFloat(lr.value);
+    g_lightColor[1] = parseFloat(lg.value);
+    g_lightColor[2] = parseFloat(lb.value);
+  }
+
+  [lr, lg, lb].forEach(s => s.oninput = updateLightColor);
+  updateLightColor();
+
+  document.getElementById("lx").oninput = (e) => g_lightPos[0] = parseFloat(e.target.value);
+  document.getElementById("ly").oninput = (e) => g_lightPos[1] = parseFloat(e.target.value);
+  document.getElementById("lz").oninput = (e) => g_lightPos[2] = parseFloat(e.target.value);
+
   document.getElementById("btnNormals").onclick = () => {
     g_showNormals = !g_showNormals;
     document.getElementById("btnNormals").innerText = 
@@ -387,6 +471,12 @@ function tick() {
   
   //console.log(g_seconds);
 
+  if (g_animateLight) {
+    g_lightAngle += dt; 
+    g_lightPos[0] = g_lightCenter[0] + g_lightRadius * Math.cos(g_lightAngle);
+    g_lightPos[2] = g_lightCenter[2] + g_lightRadius * Math.sin(g_lightAngle);
+    g_lightPos[1] = g_lightCenter[1] + 0.5 * Math.sin(g_lightAngle * 2.0);
+  }
   const start = performance.now();
   updateCamera(dt);
   renderAllShapes();
@@ -499,23 +589,56 @@ function renderAllShapes(){
 
   gl.uniform1f(u_Time, g_seconds);
 
-  gl.uniform3f(u_LightDir, 1.0, 1.0, 1.0);  
-  gl.uniform1f(u_LightIntensity, 1.0);      
-  gl.uniform1f(u_Emissive, 0.0);    
+  gl.uniform3f(u_LightPos, g_lightPos[0], g_lightPos[1], g_lightPos[2]);
+  gl.uniform1f(u_LightIntensity, 1.0);
+  gl.uniform1f(u_Emissive, 0.0);  
+
+  gl.uniform3f(u_LightColor, g_lightColor[0], g_lightColor[1], g_lightColor[2]);
+  gl.uniform1f(u_EnableLighting, g_enableLighting ? 1.0 : 0.0);
 
   const e = camera.eye.elements;
   
   gl.uniform3f(u_CamPos, e[0], e[1], e[2]);
 
+  gl.uniform1f(u_EnableSpot, g_enableSpot ? 1.0 : 0.0);
+  gl.uniform3f(u_SpotPos, g_lightPos[0], g_lightPos[1], g_lightPos[2]);
+
+  const a = camera.at.elements;
+  let dx = a[0] - e[0], dy = a[1] - e[1], dz = a[2] - e[2];
+  const len = Math.hypot(dx, dy, dz) || 1.0;
+  dx /= len; dy /= len; dz /= len;
+  gl.uniform3f(u_SpotDir, dx, dy, dz);
+
+  const inner = Math.cos((g_spotInnerDeg * Math.PI) / 180);
+  const outer = Math.cos((g_spotOuterDeg * Math.PI) / 180);
+  gl.uniform1f(u_SpotInner, inner);
+  gl.uniform1f(u_SpotOuter, outer);
+
   gl.uniform1f(u_ShowNormals, g_showNormals ? 1.0 : 0.0);
   drawGround();
   drawSky();
+  drawLightMarker();
 
-  const cube = new Matrix4();
-  cube.translate(0, 0, 0);
-  cube.scale(2, 2, 2);
-  drawCube(cube, [1, 0, 0, 1]);
+  gl.uniform1f(u_texColorWeight, 0.0); 
 
+  const sm = new Matrix4();
+  sm.translate(0, 0.5, 0);
+  g_sphere.matrix = sm;
+  g_sphere.color = [1, 1, 1, 1];
+  g_sphere.render();
+
+}
+
+function drawLightMarker() {
+  gl.uniform1f(u_texColorWeight, 0.0);
+  gl.uniform1f(u_Emissive, 1.0); // makes it bright
+
+  const m = new Matrix4();
+  m.translate(g_lightPos[0], g_lightPos[1], g_lightPos[2]);
+  m.scale(0.1, 0.1, 0.1);
+  drawCube(m, [1, 1, 0, 1]);
+
+  gl.uniform1f(u_Emissive, 0.0);
 }
 
 function drawCube(matrix, color){
@@ -559,6 +682,21 @@ function drawSky() {
 
   gl.depthMask(true);
   gl.enable(gl.CULL_FACE);
+}
+
+function drawLightMarker() {
+  gl.uniform1f(u_texColorWeight, 0.0);  
+  gl.uniform1f(u_Emissive, 1.0);        
+  gl.uniform1f(u_IsWater, 0.0);
+  gl.uniform1f(u_IsSky, 0.0);
+
+  const m = new Matrix4();
+  m.translate(g_lightPos[0], g_lightPos[1], g_lightPos[2]);
+  m.scale(0.1, 0.1, 0.1);
+
+  drawCube(m, [1, 1, 0, 1]);         
+
+  gl.uniform1f(u_Emissive, 0.0);
 }
 
 function getCameraForwardFlat() {

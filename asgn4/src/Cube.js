@@ -127,6 +127,11 @@ class Cube {
         gl.uniform4f(u_FragColor, rgba[0], rgba[1], rgba[2], rgba[3]);
         gl.uniformMatrix4fv(u_ModelMatrix, false, centered.elements);
 
+        const normalMat = new Matrix4();
+        normalMat.setInverseOf(centered);
+        normalMat.transpose();
+        gl.uniformMatrix4fv(u_NormalMatrix, false, normalMat.elements);
+
         gl.bindBuffer(gl.ARRAY_BUFFER, Cube.posBuffer);
         gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(a_Position);
