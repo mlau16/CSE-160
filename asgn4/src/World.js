@@ -125,25 +125,6 @@ let u_NormalMatrix;
 
 var u_texColorWeight;
 
-var g_vertexBuffer = null;
-let g_selectedType = "POINT";
-
-var g_uvBuffer = null;
-
-let g_selectedSegments = 20;
-
-let g_rotateAngle = 0;
-let g_rotateNeck = 0;
-let g_rotateHead = 0;
-
-let g_modelAnimation = false;
-
-let g_isDragging = false;
-let g_lastX = 0;
-let g_lastY = 0;
-
-let g_explodeDirs = null;
-
 let g_perfLast = performance.now();
 let g_perfFrames = 0;
 let g_perfFps = 0;
@@ -177,6 +158,8 @@ let g_enableSpot = true;
 let g_spotPos = [2, 3, 2];      
 let g_spotInnerDeg = 15;
 let g_spotOuterDeg = 25;
+
+let g_objModel = null;
 
 const TEX_SKY = 0;
 const TEX_WOOD = 1;
@@ -454,6 +437,10 @@ function main() {
   g_sphere = new Sphere();
 
   camera = new Camera(canvas);
+
+  g_objModel = new Model(gl, "img/teapot.obj");
+  g_objModel.load().then(() => console.log("OBJ loaded"));
+
   initWorld();
   //renderAllShapes();
   requestAnimationFrame(tick);
@@ -615,6 +602,15 @@ function renderAllShapes(){
   gl.uniform1f(u_SpotOuter, outer);
 
   gl.uniform1f(u_ShowNormals, g_showNormals ? 1.0 : 0.0);
+
+  if (g_objModel && g_objModel.loaded) {
+    g_objModel.matrix.setIdentity();
+    g_objModel.matrix.translate(0, 0.0, -2.0);
+    g_objModel.matrix.scale(0.5, 0.5, 0.5);
+    g_objModel.color = [1, 1, 1, 1];
+
+    g_objModel.render(a_Position, a_UV, a_Normal, u_ModelMatrix, u_NormalMatrix, u_FragColor);
+  }
   drawGround();
   drawSky();
   drawLightMarker();
