@@ -72,12 +72,31 @@ class Cube {
         ...uv1, ...uv2,
     ]);
 
-    const normals = new Float32Array(36 * 3);
-    for (let i = 0; i < 36; i++ ) {
-        normals[i*3 + 0] = 1.0;
-        normals[i*3 + 1] = 1.0;
-        normals[i*3 + 2] = 0.0;
-    }
+    const normals = new Float32Array([
+        // FRONT (z=1)
+        0,0,1,  0,0,1,  0,0,1,
+        0,0,1,  0,0,1,  0,0,1,
+
+        // BACK (z=0)
+        0,0,-1,  0,0,-1,  0,0,-1,
+        0,0,-1,  0,0,-1,  0,0,-1,
+
+        // LEFT (x=0)
+        -1,0,0, -1,0,0, -1,0,0,
+        -1,0,0, -1,0,0, -1,0,0,
+
+        // RIGHT (x=1)
+        1,0,0,  1,0,0,  1,0,0,
+        1,0,0,  1,0,0,  1,0,0,
+
+        // TOP (y=1)
+        0,1,0,  0,1,0,  0,1,0,
+        0,1,0,  0,1,0,  0,1,0,
+
+        // BOTTOM (y=0)
+        0,-1,0, 0,-1,0, 0,-1,0,
+        0,-1,0, 0,-1,0, 0,-1,0,
+    ]);
 
     Cube.posBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, Cube.posBuffer);

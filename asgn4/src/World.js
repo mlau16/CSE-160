@@ -45,7 +45,7 @@ var FSHADER_SOURCE =`
     vec3 N = normalize(v_Normal);
 
     if (u_ShowNormals > 0.5) {
-      gl_FragColor = vec4(N, 1.0);
+      gl_FragColor = vec4(normalize(v_Normal) * 0.5 + 0.5, 1.0);
       return;
     }
 
@@ -79,10 +79,6 @@ var FSHADER_SOURCE =`
 
       vec3 outRgb = watery.rgb * lit + watery.rgb * u_Emissive;
       gl_FragColor = vec4(clamp(outRgb, 0.0, 1.0), watery.a);
-    } else if (u_IsSky > 0.5) {
-      vec3 tinted = base.rgb * u_SkyTint;
-      gl_FragColor = vec4(tinted, base.a);
-      return;
     } else {
       vec3 outRgb = base.rgb * lit + base.rgb * u_Emissive;
       gl_FragColor = vec4(clamp(outRgb, 0.0, 1.0), base.a);
@@ -434,11 +430,12 @@ function initTextures() {
 
   const image = new Image();
   image.onload = function() {
+    console.log("Sky texture loaded", image.width, image.height)
     loadTexture(g_texture0, u_Sampler, image, TEX_SKY);
     g_textureReady = true;
   };
 
-  image.src = "img/lanternSky.jpg";
+  image.src = "img/sky.jpg";
 
   g_woodTexture = gl.createTexture();
   const woodImg = new Image();
@@ -491,26 +488,34 @@ function initWorld() {
 }
 
 function renderAllShapes(){
-  // Clear <canvas>
+  //Clear <canvas>
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  gl.uniform1f(u_ShowNormals, g_showNormals ? 1.0 : 0.0);
-
+  camera.updateView();
   camera.updateProjection(canvas);
 
-  gl.uniformMatrix4fv(u_ProjectionMatrix, false, camera.projectionMatrix.elements);
   gl.uniformMatrix4fv(u_ViewMatrix, false, camera.viewMatrix.elements);
+  gl.uniformMatrix4fv(u_ProjectionMatrix, false, camera.projectionMatrix.elements);
 
   gl.uniform1f(u_Time, g_seconds);
+
+  gl.uniform3f(u_LightDir, 1.0, 1.0, 1.0);  
+  gl.uniform1f(u_LightIntensity, 1.0);      
+  gl.uniform1f(u_Emissive, 0.0);    
 
   const e = camera.eye.elements;
   
   gl.uniform3f(u_CamPos, e[0], e[1], e[2]);
 
-  gl.uniform1f(u_IsWater, 0.0);
-
+  gl.uniform1f(u_ShowNormals, g_showNormals ? 1.0 : 0.0);
   drawGround();
-  //drawWorld();
+  drawSky();
+
+  const cube = new Matrix4();
+  cube.translate(0, 0, 0);
+  cube.scale(2, 2, 2);
+  drawCube(cube, [1, 0, 0, 1]);
+
 }
 
 function drawCube(matrix, color){
@@ -520,6 +525,7 @@ function drawCube(matrix, color){
 }
 
 function drawGround() {
+  gl.uniform1f(u_texColorWeight, 0.0)
   const g = new Matrix4();
   g.translate(0, -0.55, 0);
   g.scale(120, 0.1, 120);
@@ -527,17 +533,18 @@ function drawGround() {
 }
 
 function drawSky() {
+  console.log("drawSky g_textureReady=", g_textureReady);
   if (!g_textureReady) return;
 
   gl.activeTexture(gl.TEXTURE0 + TEX_SKY);
   gl.bindTexture(gl.TEXTURE_2D, g_texture0);
+
   gl.uniform1i(u_Sampler, TEX_SKY);
+  gl.uniform1f(u_texColorWeight, 1.0);
 
   gl.disable(gl.CULL_FACE);
-
   gl.depthMask(false);
-  gl.uniform1f(u_IsWater, 0.0)
-  gl.uniform1f(u_texColorWeight, 1.0);
+  
   gl.uniform1f(u_IsSky, 1.0);
 
   const s = new Matrix4();
@@ -545,33 +552,13 @@ function drawSky() {
   s.translate(e[0], e[1], e[2]);
   s.scale(120, 120, 120);
 
-  drawCube(s, [1, 1, 1, 1]);
+  drawCube(s, [1, 0, 1, 1]);
 
-  gl.uniform1f(u_texColorWeight, 0.0);
   gl.uniform1f(u_IsSky, 0.0);
+  gl.uniform1f(u_texColorWeight, 0.0);
 
   gl.depthMask(true);
   gl.enable(gl.CULL_FACE);
-}
-
-function drawMap(map) {
-  const H = map.length;
-  const W = map[0].length;
-
-  for (let z = 0; z < H; z++) {
-    for (let x = 0; x < W; x++) {
-      const h = map[z][x];
-      if (h <= 0) continue;
-
-        const m = new Matrix4();
-        m.translate(x - W/2, (h/2) - 0.5, z - H/2);
-        m.scale(1, h, 1);
-
-        gl.uniform1f(u_texColorWeight, 0.0);
-        drawCube(m, [0.08, 0.08, 0.12, 1]);
-      
-    }
-  }
 }
 
 function getCameraForwardFlat() {
