@@ -13,12 +13,12 @@ scene.fog = new THREE.FogExp2(0x38244F, 0.05);
 
 const cubeTextureLoader = new THREE.CubeTextureLoader();
 const skybox = cubeTextureLoader.load([
-  '/img/px.png',
-  '/img/nx.png',
-  '/img/py.png',
-  '/img/ny.png',
-  '/img/pz.png',
-  '/img/nz.png',
+  './img/px.png',
+  './img/nx.png',
+  './img/py.png',
+  './img/ny.png',
+  './img/pz.png',
+  './img/nz.png',
 ]);
 
 scene.background = skybox;
@@ -131,7 +131,7 @@ makeBox(2.5, 4, 3, 0x222233, 5, 1, 5);
 
 makeSkyline();
 
-objLoader.load('/public/resources/Building1.obj', (obj) => {
+objLoader.load('./public/resources/Building1.obj', (obj) => {
   obj.traverse((child) => {
     if (child.isMesh) {
       child.material = new THREE.MeshPhongMaterial({ color: 0x222233 });
@@ -321,7 +321,7 @@ function addSkylineWindows(buildingX, buildingZ, width, depth, height) {
 }
 
 function loadLamp(x, y, z, scale = 1, rotationY = 0) {
-   gltfLoader.load('/public/resources/Lamp.glb', (gltf) => {
+   gltfLoader.load('./public/resources/Lamp.glb', (gltf) => {
 
     const lamp = gltf.scene;
 
@@ -341,7 +341,7 @@ function loadLamp(x, y, z, scale = 1, rotationY = 0) {
 }
 
 function loadRoad(x, y, z, scale = 1) {
-  gltfLoader.load('/public/resources/Road.glb', (gltf) => {
+  gltfLoader.load('./public/resources/Road.glb', (gltf) => {
     const road = gltf.scene;
     
     road.position.set(x, y, z);
@@ -353,7 +353,7 @@ function loadRoad(x, y, z, scale = 1) {
 }
 
 function loadBuilding(x, y, z, scale = 1, rotationY = 0) {
-  gltfLoader.load('/public/resources/building2.glb', (gltf) => {
+  gltfLoader.load('./public/resources/building2.glb', (gltf) => {
     const build2 = gltf.scene;
     
     build2.position.set(x, y, z);
