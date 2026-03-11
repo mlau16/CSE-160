@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const scene = new THREE.Scene();
@@ -19,6 +21,8 @@ const skybox = cubeTextureLoader.load([
 scene.background = skybox;
 
 const objLoader = new OBJLoader();
+const mtlLoader = new MTLLoader();
+const gltfLoader = new GLTFLoader();
 
 const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 
@@ -96,6 +100,11 @@ makeNeonSign(0.03, 1.2, 0.5, 0xff44aa, -3.8, 2, 2.15);
 addWindows(-3.48, 2, 4, 1.8, 0.4);
 addWindows(-3.48, 3, 4, 1.8, 0.4);
 addWindows(-3.48, 4, 4, 1.8, 0.4);
+
+loadLamp(-3.2, -1, -7, 0.5, 7.8);
+loadLamp(3.2, -1, -6, 0.5, -7.8);
+loadLamp(-3.2, -1, 7, 0.5, 7.8);
+loadLamp(3.2, -1, 3, 0.5, -7.8);
 
 camera.position.z = 5;
 
@@ -216,4 +225,24 @@ function addSkylineWindows(buildingX, buildingZ, width, depth, height) {
     w4.position.set(buildingX, y, buildingZ - depth / 2 - 0.06);
     scene.add(w4);
   }
+}
+
+function loadLamp(x, y, z, scale = 1, rotationY = 0) {
+   gltfLoader.load('/public/resources/Lamp.glb', (gltf) => {
+
+    const lamp = gltf.scene;
+
+    lamp.position.set(x, y, z);
+    lamp.scale.set(scale, scale, scale);
+
+    lamp.rotation.y = rotationY;
+
+    scene.add(lamp);
+
+    const glow = new THREE.PointLight(0xffcc88, 3, 12);
+    glow.position.set(x, y + 2.5 * scale, z);
+    scene.add(glow);
+
+  });
+
 }
